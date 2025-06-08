@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <title>楊凱網頁快速連接首頁</title>
+  <style>
+    :root {
+      --bg-color: #121212;
+      --text-color: #e0e0e0;
+      --card-bg: #1e1e1e;
+      --card-hover: #2c2c2c;
+      --section-border: rgba(255, 255, 255, 0.2);
+      --link-color: #90caf9;
+      --preview-border: #444;
+    }
+
+    body.light {
+      --bg-color: #f4f4f9;
+      --text-color: #333;
+      --card-bg: #ffffff;
+      --card-hover: #e6f0ff;
+      --section-border: rgba(0, 0, 0, 0.1);
+      --link-color: #007bff;
+      --preview-border: #ccc;
+    }
+
+    body {
+      font-family: Arial, sans-serif;
+      background-color: var(--bg-color);
+      color: var(--text-color);
+      margin: 0;
+      padding: 2rem;
+      transition: background-color 0.3s, color 0.3s;
+    }
+
+    #toggle-theme {
+      position: fixed;
+      top: 1rem;
+      right: 1rem;
+      padding: 0.5rem 1rem;
+      background: var(--card-bg);
+      color: var(--link-color);
+      border: 1px solid var(--preview-border);
+      border-radius: 8px;
+      cursor: pointer;
+      z-index: 999;
+      transition: background-color 0.3s, color 0.3s;
+    }
+
+    #page-title {
+      position: absolute;
+      top: 1.5rem;
+      left: 2rem;
+      font-size: 1.2rem;
+      font-weight: bold;
+      color: var(--text-color);
+    }
+
+    #search-box {
+      display: block;
+      margin: 1rem auto;
+      width: 300px;
+      padding: 0.5rem;
+      border-radius: 6px;
+      border: 1px solid var(--preview-border);
+      background-color: var(--card-bg);
+      color: var(--text-color);
+    }
+
+    #quote-box {
+  text-align: left;
+      text-align: center;
+      margin-bottom: 1rem;
+      color: var(--text-color);
+      white-space: pre-line;
+      position: relative;
+      padding: 1rem;
+    }
+
+    #quote-date {
+      font-size: 1rem;
+    }
+
+    #quote-text {
+      font-size: 1.4rem;
+      line-height: 1.8;
+      margin-top: 0.5rem;
+    }
+
+    #quote-button {
+  display: inline-block;
+  margin-top: 0.5rem;
+  margin-left: 0;
+  font-size: 0.9rem;
+  background-color: var(--card-hover);
+  color: var(--text-color);
+  border: 1px solid var(--preview-border);
+  border-radius: 6px;
+  cursor: pointer;
+  padding: 0.4rem 0.8rem;
+}
+
+    .section {
+      margin-bottom: 2rem;
+      padding: 1rem;
+      border-radius: 10px;
+    }
+
+    .section h2 {
+      margin-bottom: 0.5rem;
+      padding-left: 10px;
+      border-left: 5px solid var(--section-border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      cursor: pointer;
+    }
+
+    .toggle-btn {
+      font-size: 0.8em;
+      background: none;
+      border: none;
+      color: inherit;
+      cursor: pointer;
+      padding: 0.2rem 0.5rem;
+      border-radius: 6px;
+      transition: background-color 0.2s;
+    }
+
+    .toggle-btn:hover {
+      background-color: var(--card-hover);
+    }
+
+    .link-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 1rem;
+    }
+
+    a.link-item {
+      display: block;
+      background-color: var(--card-bg);
+      padding: 1rem;
+      border-radius: 8px;
+      text-align: center;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.5);
+      transition: 0.2s;
+      text-decoration: none;
+      color: var(--link-color);
+      font-weight: bold;
+    }
+
+    a.link-item:hover {
+      transform: scale(1.05);
+      background-color: var(--card-hover);
+    }
+
+    .preview-box {
+      position: absolute;
+      width: 400px;
+      height: 300px;
+      border: 2px solid var(--preview-border);
+      background-color: var(--card-bg);
+      display: none;
+      z-index: 1000;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.6);
+    }
+
+    .preview-box iframe {
+      width: 100%;
+      height: 100%;
+      border: none;
+    }
+
+    .floating-contact {
+      position: fixed;
+      bottom: 1rem;
+      right: 1rem;
+      background-color: var(--card-bg);
+      color: var(--text-color);
+      padding: 1rem;
+      border: 1px solid var(--preview-border);
+      border-radius: 12px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+      font-size: 0.9rem;
+      z-index: 998;
+    }
+  </style>
+</head>
+<body>
+  <div id="page-title">楊凱網頁快速連接</div>
+  <button id="toggle-theme">🌙</button>
+
+  <div id="quote-box" style="text-align: center;">
+    <div id="quote-date" style="text-align: center; font-size: 1.4rem; margin-bottom: 0.2rem; display: inline-block;"></div>
+    <div id="quote-text" style="text-align: center; display: inline-block;">
+  <div style="display: inline-block; text-align: left; position: relative;">
+    <span id="quote-line"></span>
+    <button id="quote-button" style="position: absolute; bottom: 0; right: 0; font-size: 0.9rem; background-color: var(--card-hover); color: var(--text-color); border: 1px solid var(--preview-border); border-radius: 6px; cursor: pointer; padding: 0.4rem 0.8rem;">換一句</button>
+  </div>
+</div>
+</div>
+  </div>
+
+  <input type="text" id="search-box" placeholder="搜尋連結...">
+  <div id="linkSections"></div>
+  <div class="preview-box" id="previewBox">
+    <iframe src=""></iframe>
+  </div>
+  <div class="floating-contact">
+    楊凱<br>
+    Email：5454sky@gmail.com<br>
+    Line ID：xinxin116<br>
+    Instagram：<a href="https://www.instagram.com/ysk_janxvi/" target="_blank">ysk_janxvi</a>
+  </div>
+
+  <script>
+    const categories = {
+    "娛樂":   { dark: "#2c2c1e", light: "#fdfde7", textColor: "#fbc02d" }, // 黃
+    "數位影像處理":       { dark: "#1e2d1e", light: "#e8f5e9", textColor: "#4caf50" }, // 綠
+    "英文(二)":   { dark: "#1e1e2c", light: "#e3f2fd", textColor: "#42a5f5" }, // 藍
+    "Code":       { dark: "#1e2c2c", light: "#e0f7fa", textColor: "#26c6da" }, // 青
+    "電子學":   { dark: "#2c1e2c", light: "#fce4ec", textColor: "#ec407a" }, // 粉紅     
+
+    "技術工具":       { dark: "#2c1e1e", light: "#fff3e0", textColor: "#ff7043" }, // 橘   
+    "新聞資訊":   { dark: "#2c2c2c", light: "#eeeeee", textColor: "#9e9e9e" }, // 灰
+    "AI工具":     { dark: "#1e1e1e", light: "#f3e5f5", textColor: "#ba68c8" }, // 紫
+    "學習資源":   { dark: "#1e2633", light: "#e8f0fe", textColor: "#64b5f6" }, // 藍灰
+    "遊戲":       { dark: "#2e1e30", light: "#f3e5f5", textColor: "#ab47bc" }, // 紫紅
+    };
+
+
+    const quotes = [
+  "「妳是什麼座的啊？」\n：「金牛座啊，你呢？」\n「我是為妳量身訂做的。」",
+  "「別再哭了，這樣有個地方會痛。」\n：「我的眼睛嗎？」\n「不是，是我的心會痛。」",
+  "「我可以跟妳問路嗎？」\n：「你要到哪裡？」\n「到妳心裡。」",
+  "「你覺得一個禮拜裡面，我比較喜歡哪一天？」\n：「星期天嗎？」\n「我喜歡有你的每一天。」",
+  "「妳為什麼要害我！」\n：「我害你什麼了？」\n「害我那麼喜歡妳！」",
+  "「下禮拜要期末考，但是我一點都不想唸書….因為我只想念妳。」",
+  "你不用多好，只要我喜歡你就好。",
+  "我有個很大的缺點，缺了點你。",
+  "老虎不發威，妳當我……當我女朋友吧。",
+  "我不能玩捉迷藏，因為喜歡妳是藏不住的。",
+  "這世界上的美有很多種，而你就是我最喜歡的那種。",
+  "妳的過去我來不及參與，但妳的未來我一定不會缺席。",
+  "我不需要征服世界，因為發現妳就是我的全世界。"
+];
+
+    function updateQuote() {
+      const quoteText = document.getElementById("quote-text");
+      const randomQuote = quotes[Math.floor(Math.random() * quotes.length)];
+      document.getElementById("quote-line").innerText = randomQuote;
+    }
+
+    const today = new Date();
+    const dateStr = today.toLocaleDateString("zh-Hant", { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' });
+    document.getElementById("quote-date").textContent = dateStr;
+    updateQuote();
+    document.getElementById("quote-button").addEventListener("click", updateQuote);
+
+    const links = [    
+      { name: "期中考", url: "https://yang-s-k.github.io/multipleChoiceQuestion.github.io/", category: "數位影像處理" },
+      { name: "期末考", url: "https://yang-s-k.github.io/V2multipleChoiceQuestion.github.io/quiz_home_selector.html", category: "數位影像處理" },
+       { name: "期中考", url: "https://yang-s-k.github.io/engPractice.github.io/", category: "英文(二)" },
+       { name: "期末考", url: "https://", category: "英文(二)" },
+       { name: "期中考", url: "https://yang-s-k.github.io/electronicsMultipleChoiceQuestion.github.io/", category: "電子學" },
+      { name: "阿瓦隆主持人", url: "https://yang-s-k.github.io/AvalonMaster.github.io/", category: "娛樂" },
+      { name: "累加計數器", url: "https://yang-s-k.github.io/counter.github.io/", category: "娛樂" },
+      { name: "智能電風扇", url: "https://github.com/Yang-S-K/smartFan", category: "Code" },
+      { name: "GC_Battery", url: "https://github.com/Yang-S-K/GC_Battery", category: "Code" },
+      { name: "iclab", url: "https://github.com/Yang-S-K/iclab", category: "Code" }
+    ];
+
+    const body = document.body;
+    const toggleBtn = document.getElementById("toggle-theme");
+    const searchBox = document.getElementById("search-box");
+
+    function prefersDark() {
+      return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+    }
+
+    let currentTheme = prefersDark() ? "dark" : "light";
+    if (currentTheme === "light") {
+      body.classList.add("light");
+      toggleBtn.textContent = "☀️";
+    } else {
+      toggleBtn.textContent = "🌙";
+    }
+
+    toggleBtn.addEventListener("click", () => {
+      body.classList.toggle("light");
+      const isLight = body.classList.contains("light");
+      toggleBtn.textContent = isLight ? "☀️" : "🌙";
+      renderSections(isLight ? "light" : "dark");
+    });
+
+    searchBox.addEventListener("input", () => renderSections(currentTheme));
+
+    function renderSections(theme = "dark") {
+      const container = document.getElementById("linkSections");
+      container.innerHTML = "";
+      const filteredLinks = links.filter(link =>
+        link.name.toLowerCase().includes(searchBox.value.toLowerCase())
+      );
+
+      const sectionMap = {};
+      filteredLinks.forEach(link => {
+        if (!sectionMap[link.category]) sectionMap[link.category] = [];
+        sectionMap[link.category].push(link);
+      });
+
+      Object.keys(sectionMap).forEach(category => {
+        const cat = categories[category];
+        const bgColor = theme === "dark" ? cat.dark : cat.light;
+        const textColor = cat.textColor;
+
+        const section = document.createElement("div");
+        section.className = "section";
+        section.style.backgroundColor = bgColor;
+
+        const title = document.createElement("h2");
+        const toggle = document.createElement("button");
+        toggle.className = "toggle-btn";
+        toggle.textContent = "⮟";
+
+        const span = document.createElement("span");
+        span.textContent = category;
+        title.appendChild(span);
+        title.appendChild(toggle);
+        title.style.color = textColor;
+        section.appendChild(title);
+
+        const grid = document.createElement("div");
+        grid.className = "link-grid";
+
+        sectionMap[category].forEach(link => {
+          const anchor = document.createElement("a");
+          anchor.href = link.url;
+          anchor.target = "_blank";
+          anchor.className = "link-item";
+          anchor.textContent = link.name;
+
+          anchor.addEventListener("mouseenter", e => {
+            const previewBox = document.getElementById("previewBox");
+            const iframe = previewBox.querySelector("iframe");
+            iframe.src = link.url;
+            previewBox.style.left = e.pageX + 20 + "px";
+            previewBox.style.top = e.pageY + 20 + "px";
+            previewBox.style.display = "block";
+          });
+
+          anchor.addEventListener("mousemove", e => {
+            const previewBox = document.getElementById("previewBox");
+            previewBox.style.left = e.pageX + 20 + "px";
+            previewBox.style.top = e.pageY + 20 + "px";
+          });
+
+          anchor.addEventListener("mouseleave", () => {
+            const previewBox = document.getElementById("previewBox");
+            const iframe = previewBox.querySelector("iframe");
+            previewBox.style.display = "none";
+            iframe.src = "";
+          });
+
+          grid.appendChild(anchor);
+        });
+
+        toggle.addEventListener("click", e => {
+          e.stopPropagation();
+          const isHidden = grid.style.display === "none";
+          grid.style.display = isHidden ? "grid" : "none";
+          toggle.textContent = isHidden ? "⮟" : "⮝";
+        });
+
+        section.appendChild(grid);
+        container.appendChild(section);
+      });
+    }
+
+    renderSections(currentTheme);
+  </script>
+</body>
+</html>
