@@ -346,6 +346,7 @@
           anchor.textContent = link.name;
 
           anchor.addEventListener("mouseenter", e => {
+            if (window.innerWidth < 768) return;  // 小螢幕不顯示預覽
             const previewBox = document.getElementById("previewBox");
             const iframe = previewBox.querySelector("iframe");
             iframe.src = link.url;
@@ -355,12 +356,14 @@
           });
 
           anchor.addEventListener("mousemove", e => {
+            if (window.innerWidth < 768) return;  // 小螢幕不移動預覽
             const previewBox = document.getElementById("previewBox");
             previewBox.style.left = e.pageX + 20 + "px";
             previewBox.style.top = e.pageY + 20 + "px";
           });
 
           anchor.addEventListener("mouseleave", () => {
+            if (window.innerWidth < 768) return;  // 小螢幕不隱藏預覽（本來就沒出現）
             const previewBox = document.getElementById("previewBox");
             const iframe = previewBox.querySelector("iframe");
             previewBox.style.display = "none";
