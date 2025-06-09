@@ -340,35 +340,35 @@
 
         sectionMap[category].forEach(link => {
           const anchor = document.createElement("a");
+          const isMobile = window.innerWidth < 768;
           anchor.href = link.url;
           anchor.target = "_blank";
           anchor.className = "link-item";
           anchor.textContent = link.name;
 
-          anchor.addEventListener("mouseenter", e => {
-            if (window.innerWidth < 768) return;  // 小螢幕不顯示預覽
-            const previewBox = document.getElementById("previewBox");
-            const iframe = previewBox.querySelector("iframe");
-            iframe.src = link.url;
-            previewBox.style.left = e.pageX + 20 + "px";
-            previewBox.style.top = e.pageY + 20 + "px";
-            previewBox.style.display = "block";
-          });
+          if (!isMobile) {
+            anchor.addEventListener("mouseenter", e => {
+              const previewBox = document.getElementById("previewBox");
+              const iframe = previewBox.querySelector("iframe");
+              iframe.src = link.url;
+              previewBox.style.left = e.pageX + 20 + "px";
+              previewBox.style.top = e.pageY + 20 + "px";
+              previewBox.style.display = "block";
+            });
 
-          anchor.addEventListener("mousemove", e => {
-            if (window.innerWidth < 768) return;  // 小螢幕不移動預覽
-            const previewBox = document.getElementById("previewBox");
-            previewBox.style.left = e.pageX + 20 + "px";
-            previewBox.style.top = e.pageY + 20 + "px";
-          });
+            anchor.addEventListener("mousemove", e => {
+              const previewBox = document.getElementById("previewBox");
+              previewBox.style.left = e.pageX + 20 + "px";
+              previewBox.style.top = e.pageY + 20 + "px";
+            });
 
-          anchor.addEventListener("mouseleave", () => {
-            if (window.innerWidth < 768) return;  // 小螢幕不隱藏預覽（本來就沒出現）
-            const previewBox = document.getElementById("previewBox");
-            const iframe = previewBox.querySelector("iframe");
-            previewBox.style.display = "none";
-            iframe.src = "";
-          });
+            anchor.addEventListener("mouseleave", () => {
+              const previewBox = document.getElementById("previewBox");
+              const iframe = previewBox.querySelector("iframe");
+              previewBox.style.display = "none";
+              iframe.src = "";
+            });
+          }
 
           grid.appendChild(anchor);
         });
