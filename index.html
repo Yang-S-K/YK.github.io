@@ -216,6 +216,13 @@
   </div>
 
   <script>
+    // 手機畫面直接隱藏預覽視窗的容器
+if (window.innerWidth < 768) {
+  const style = document.createElement('style');
+  style.innerHTML = `.preview-box { display: none !important; }`;
+  document.head.appendChild(style);
+}
+
     const categories = {
     "娛樂":   { dark: "#2c2c1e", light: "#fdfde7", textColor: "#fbc02d" }, // 黃
     "數位影像處理":       { dark: "#1e2d1e", light: "#e8f5e9", textColor: "#4caf50" }, // 綠
@@ -346,29 +353,27 @@
           anchor.className = "link-item";
           anchor.textContent = link.name;
 
-          if (!isMobile) {
-            anchor.addEventListener("mouseenter", e => {
-              const previewBox = document.getElementById("previewBox");
-              const iframe = previewBox.querySelector("iframe");
-              iframe.src = link.url;
-              previewBox.style.left = e.pageX + 20 + "px";
-              previewBox.style.top = e.pageY + 20 + "px";
-              previewBox.style.display = "block";
-            });
+          anchor.addEventListener("mouseenter", e => {
+            const previewBox = document.getElementById("previewBox");
+            const iframe = previewBox.querySelector("iframe");
+            iframe.src = link.url;
+            previewBox.style.left = e.pageX + 20 + "px";
+            previewBox.style.top = e.pageY + 20 + "px";
+            previewBox.style.display = "block";
+          });
 
-            anchor.addEventListener("mousemove", e => {
-              const previewBox = document.getElementById("previewBox");
-              previewBox.style.left = e.pageX + 20 + "px";
-              previewBox.style.top = e.pageY + 20 + "px";
-            });
+          anchor.addEventListener("mousemove", e => {
+            const previewBox = document.getElementById("previewBox");
+            previewBox.style.left = e.pageX + 20 + "px";
+            previewBox.style.top = e.pageY + 20 + "px";
+          });
 
-            anchor.addEventListener("mouseleave", () => {
-              const previewBox = document.getElementById("previewBox");
-              const iframe = previewBox.querySelector("iframe");
-              previewBox.style.display = "none";
-              iframe.src = "";
-            });
-          }
+          anchor.addEventListener("mouseleave", () => {
+            const previewBox = document.getElementById("previewBox");
+            const iframe = previewBox.querySelector("iframe");
+            previewBox.style.display = "none";
+            iframe.src = "";
+          });
 
           grid.appendChild(anchor);
         });
