@@ -185,6 +185,24 @@
       font-size: 0.9rem;
       z-index: 998;
     }
+    #external-link {
+  position: fixed;
+  top: 1rem;
+  right: 5rem; /* 調整和按鈕的間距 */
+  padding: 0.5rem 1rem;
+  background: var(--card-bg);
+  color: var(--link-color);
+  border: 1px solid var(--preview-border);
+  border-radius: 8px;
+  text-decoration: none;
+  z-index: 999;
+  transition: background-color 0.3s, color 0.3s;
+}
+
+#external-link:hover {
+  background-color: var(--card-hover);
+}
+
   </style>
   <meta name="viewport" content="width=device-width, initial-scale=1">
 
@@ -192,7 +210,7 @@
 <body>
   <div id="page-title">楊凱網頁快速連接</div>
   <button id="toggle-theme">🌙</button>
-
+  <a id="external-link" href="https://www.google.com" target="_blank">Google</a>
   <div id="quote-box" style="text-align: center;">
     <div id="quote-date" style="text-align: center; font-size: 1.4rem; margin-bottom: 0.2rem; display: inline-block;"></div>
     <div id="quote-text" style="text-align: center; display: inline-block;">
@@ -408,3 +426,4 @@ if (window.innerWidth < 768) {
   </script>
 </body>
 </html>
+
