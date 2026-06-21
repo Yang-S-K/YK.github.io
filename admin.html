@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>後台管理</title>
+  <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
+  <style>
+    :root {
+      --bg: #121212; --surface: #1e1e1e; --surface2: #2c2c2c;
+      --text: #e0e0e0; --muted: #888; --border: #444;
+      --primary: #90caf9; --danger: #ef5350; --success: #66bb6a;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: Arial, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+
+    /* ── Top bar ── */
+    #topbar {
+      position: sticky; top: 0; background: var(--surface); border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0.75rem 1.5rem; z-index: 100;
+    }
+    #topbar h1 { font-size: 1rem; }
+    #topbar a { color: var(--primary); font-size: 0.85rem; text-decoration: none; }
+
+    /* ── Tabs ── */
+    #tabs { display: flex; gap: 0; border-bottom: 1px solid var(--border); background: var(--surface); }
+    .tab-btn {
+      padding: 0.75rem 1.25rem; border: none; background: none; color: var(--muted);
+      cursor: pointer; font-size: 0.9rem; border-bottom: 2px solid transparent;
+    }
+    .tab-btn.active { color: var(--primary); border-bottom-color: var(--primary); }
+
+    /* ── Content ── */
+    .tab-panel { display: none; padding: 1.5rem; max-width: 900px; margin: 0 auto; }
+    .tab-panel.active { display: block; }
+
+    /* ── Section header row ── */
+    .panel-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
+    .panel-header h2 { font-size: 1rem; }
+
+    /* ── Buttons ── */
+    .btn {
+      padding: 0.4rem 0.9rem; border-radius: 6px; border: 1px solid var(--border);
+      cursor: pointer; font-size: 0.85rem; background: var(--surface2); color: var(--text);
+    }
+    .btn-primary { background: var(--primary); color: #111; border-color: var(--primary); font-weight: bold; }
+    .btn-danger  { background: var(--danger);  color: #fff; border-color: var(--danger); }
+    .btn-success { background: var(--success); color: #111; border-color: var(--success); }
+    .btn:hover   { opacity: 0.85; }
+
+    /* ── List items ── */
+    .list-item {
+      display: flex; align-items: center; gap: 0.75rem; padding: 0.65rem 0.75rem;
+      background: var(--surface); border-radius: 8px; margin-bottom: 0.5rem;
+    }
+    .drag-handle { cursor: grab; color: var(--muted); font-size: 1.1rem; flex-shrink: 0; }
+    .drag-handle:active { cursor: grabbing; }
+    .item-name { flex: 1; font-size: 0.9rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .item-sub  { font-size: 0.75rem; color: var(--muted); }
+    .item-actions { display: flex; gap: 0.4rem; flex-shrink: 0; }
+
+    .badge {
+      font-size: 0.7rem; padding: 0.15rem 0.45rem; border-radius: 10px;
+      background: var(--surface2); color: var(--muted);
+    }
+    .badge.public       { background: #1a3a1a; color: #66bb6a; }
+    .badge.password     { background: #3a2a1a; color: #ffa726; }
+    .badge.users        { background: #1a2a3a; color: #42a5f5; }
+    .badge.passwordOrUsers { background: #2a1a3a; color: #ba68c8; }
+
+    .toggle-visible { cursor: pointer; font-size: 0.8rem; color: var(--muted); }
+    .toggle-visible.on  { color: var(--success); }
+    .toggle-visible.off { color: var(--danger);  }
+
+    /* ── Section filter bar ── */
+    #link-section-filter { display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1rem; flex-wrap: wrap; }
+    #link-section-filter select {
+      padding: 0.4rem 0.6rem; border-radius: 6px; border: 1px solid var(--border);
+      background: var(--surface); color: var(--text); font-size: 0.85rem;
+    }
+
+    /* ── Favicon preview ── */
+    .favicon-preview { width: 16px; height: 16px; flex-shrink: 0; }
+
+    /* ── Modal ── */
+    .modal-overlay {
+      position: fixed; inset: 0; background: rgba(0,0,0,0.7);
+      display: flex; align-items: center; justify-content: center; z-index: 500;
+    }
+    .modal-overlay.hidden { display: none; }
+    .modal-box {
+      background: var(--surface); border-radius: 12px; padding: 1.5rem;
+      width: 90%; max-width: 480px; max-height: 90vh; overflow-y: auto;
+    }
+    .modal-box h3 { margin-bottom: 1rem; font-size: 1rem; }
+
+    .form-row { margin-bottom: 0.75rem; }
+    .form-row label { display: block; font-size: 0.8rem; color: var(--muted); margin-bottom: 0.3rem; }
+    .form-row input, .form-row select, .form-row textarea {
+      width: 100%; padding: 0.45rem 0.6rem; border-radius: 6px; border: 1px solid var(--border);
+      background: var(--bg); color: var(--text); font-size: 0.9rem; font-family: inherit;
+    }
+    .form-row textarea { resize: vertical; min-height: 60px; }
+    .form-row input[type=checkbox] { width: auto; }
+
+    .color-presets { display: flex; gap: 0.4rem; flex-wrap: wrap; margin-bottom: 0.5rem; }
+    .preset-chip {
+      width: 28px; height: 28px; border-radius: 50%; cursor: pointer; border: 2px solid transparent;
+      transition: border-color 0.15s;
+    }
+    .preset-chip:hover, .preset-chip.selected { border-color: var(--primary); }
+
+    .color-inputs { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0.5rem; }
+    .color-input-group { display: flex; gap: 0.3rem; align-items: center; }
+    .color-input-group input[type=color] { width: 36px; height: 30px; border: none; background: none; cursor: pointer; padding: 0; }
+    .color-input-group input[type=text]  { flex: 1; padding: 0.3rem 0.4rem; font-size: 0.8rem; }
+
+    .modal-actions { display: flex; gap: 0.5rem; justify-content: flex-end; margin-top: 1rem; }
+
+    /* ── Link checker ── */
+    #checker-results { margin-top: 1rem; }
+    .check-row { display: flex; align-items: center; gap: 0.5rem; padding: 0.4rem 0; border-bottom: 1px solid var(--border); }
+    .check-row .check-name { flex: 1; font-size: 0.85rem; }
+    .check-row .check-status { font-size: 0.8rem; padding: 0.1rem 0.4rem; border-radius: 4px; }
+    .check-ok   { background: #1a3a1a; color: var(--success); }
+    .check-fail { background: #3a1a1a; color: var(--danger);  }
+
+    /* ── Users ── */
+    .user-role { font-size: 0.75rem; padding: 0.1rem 0.4rem; border-radius: 4px; background: var(--surface2); }
+    .user-role.admin { background: #2a1a1a; color: #ff7043; }
+
+    /* ── Toast ── */
+    #toast {
+      position: fixed; bottom: 1.5rem; left: 50%; transform: translateX(-50%);
+      background: var(--surface2); color: var(--text); padding: 0.6rem 1.2rem;
+      border-radius: 8px; font-size: 0.85rem; z-index: 1000;
+      opacity: 0; transition: opacity 0.3s; pointer-events: none;
+    }
+    #toast.show { opacity: 1; }
+  </style>
+</head>
+<body>
+
+<div id="topbar">
+  <h1>⚙️ 後台管理</h1>
+  <a href="index.html">← 返回首頁</a>
+</div>
+
+<div id="tabs">
+  <button class="tab-btn active" data-tab="sections">區塊</button>
+  <button class="tab-btn" data-tab="links">連結</button>
+  <button class="tab-btn" data-tab="users">用戶</button>
+  <button class="tab-btn" data-tab="checker">連結檢查</button>
+</div>
+
+<!-- ── Tab: Sections ── -->
+<div id="tab-sections" class="tab-panel active">
+  <div class="panel-header">
+    <h2>區塊管理</h2>
+    <button class="btn btn-primary" id="add-section-btn">+ 新增區塊</button>
+  </div>
+  <div id="sections-list"></div>
+</div>
+
+<!-- ── Tab: Links ── -->
+<div id="tab-links" class="tab-panel">
+  <div class="panel-header">
+    <h2>連結管理</h2>
+    <button class="btn btn-primary" id="add-link-btn">+ 新增連結</button>
+  </div>
+  <div id="link-section-filter">
+    <span style="font-size:0.85rem;color:var(--muted)">篩選區塊：</span>
+    <select id="link-filter-select"><option value="">全部</option></select>
+    <input type="text" id="link-search" placeholder="搜尋名稱或網址..."
+      style="padding:0.4rem 0.6rem;border-radius:6px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:0.85rem;min-width:200px;">
+  </div>
+  <div id="links-list"></div>
+</div>
+
+<!-- ── Tab: Users ── -->
+<div id="tab-users" class="tab-panel">
+  <div class="panel-header">
+    <h2>用戶管理</h2>
+    <button class="btn btn-primary" id="add-user-btn">+ 新增用戶</button>
+  </div>
+  <div id="users-list"></div>
+</div>
+
+<!-- ── Tab: Link Checker ── -->
+<div id="tab-checker" class="tab-panel">
+  <div class="panel-header">
+    <h2>連結有效性檢查</h2>
+    <button class="btn btn-primary" id="run-check-btn">開始檢查</button>
+  </div>
+  <p style="font-size:0.8rem;color:var(--muted);margin-bottom:0.75rem;">
+    透過 Apps Script 逐一測試所有連結，連結數量多時需要較長時間。
+  </p>
+  <div id="checker-results"></div>
+</div>
+
+<!-- ── Section modal ── -->
+<div class="modal-overlay hidden" id="section-modal">
+  <div class="modal-box">
+    <h3 id="section-modal-title">新增區塊</h3>
+    <input type="hidden" id="sm-id">
+
+    <div class="form-row">
+      <label>名稱</label>
+      <input type="text" id="sm-name" placeholder="區塊名稱">
+    </div>
+
+    <div class="form-row">
+      <label>顏色主題（點選預設或手動輸入 hex）</label>
+      <div class="color-presets" id="color-presets"></div>
+      <div class="color-inputs">
+        <div>
+          <div style="font-size:0.75rem;color:var(--muted);margin-bottom:0.2rem;">深色背景</div>
+          <div class="color-input-group">
+            <input type="color" id="sm-dark-picker">
+            <input type="text"  id="sm-dark"   placeholder="#1e1e1e">
+          </div>
+        </div>
+        <div>
+          <div style="font-size:0.75rem;color:var(--muted);margin-bottom:0.2rem;">淺色背景</div>
+          <div class="color-input-group">
+            <input type="color" id="sm-light-picker">
+            <input type="text"  id="sm-light"  placeholder="#f4f4f9">
+          </div>
+        </div>
+        <div>
+          <div style="font-size:0.75rem;color:var(--muted);margin-bottom:0.2rem;">文字顏色</div>
+          <div class="color-input-group">
+            <input type="color" id="sm-text-picker">
+            <input type="text"  id="sm-text"   placeholder="#90caf9">
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="form-row">
+      <label>可見性</label>
+      <select id="sm-visibility">
+        <option value="public">public — 所有人</option>
+        <option value="password">password — 需要密碼</option>
+        <option value="users">users — 指定帳號</option>
+        <option value="passwordOrUsers">passwordOrUsers — 密碼或指定帳號</option>
+      </select>
+    </div>
+
+    <div class="form-row" id="sm-password-row">
+      <label>密碼</label>
+      <input type="text" id="sm-password" placeholder="解鎖密碼">
+    </div>
+
+    <div class="form-row" id="sm-users-row">
+      <label>允許的帳號 ID（每行一個）</label>
+      <textarea id="sm-allowed-users" rows="3" placeholder="yk&#10;friend1"></textarea>
+    </div>
+
+    <div class="form-row">
+      <label>備註（顯示在區塊頂部，支援換行）</label>
+      <textarea id="sm-note" rows="2" placeholder="選填說明文字..."></textarea>
+    </div>
+
+    <div class="form-row">
+      <label style="display:flex;align-items:center;gap:0.5rem;">
+        <input type="checkbox" id="sm-visible" checked>
+        顯示此區塊
+      </label>
+    </div>
+
+    <div class="modal-actions">
+      <button class="btn" id="section-modal-cancel">取消</button>
+      <button class="btn btn-primary" id="section-modal-save">儲存</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Link modal ── -->
+<div class="modal-overlay hidden" id="link-modal">
+  <div class="modal-box">
+    <h3 id="link-modal-title">新增連結</h3>
+    <input type="hidden" id="lm-id">
+
+    <div class="form-row">
+      <label>名稱</label>
+      <input type="text" id="lm-name" placeholder="連結名稱">
+    </div>
+    <div class="form-row">
+      <label>網址</label>
+      <input type="url" id="lm-url" placeholder="https://...">
+    </div>
+    <div class="form-row">
+      <label>所屬區塊</label>
+      <select id="lm-section"></select>
+    </div>
+    <div class="form-row">
+      <label>自訂 Favicon URL（留空自動抓取）</label>
+      <input type="text" id="lm-favicon" placeholder="https://...（可留空）">
+    </div>
+    <div class="form-row">
+      <label style="display:flex;align-items:center;gap:0.5rem;">
+        <input type="checkbox" id="lm-pinned"> 置頂顯示
+      </label>
+    </div>
+    <div class="form-row">
+      <label style="display:flex;align-items:center;gap:0.5rem;">
+        <input type="checkbox" id="lm-visible" checked> 顯示此連結
+      </label>
+    </div>
+
+    <div class="modal-actions">
+      <button class="btn" id="link-modal-cancel">取消</button>
+      <button class="btn btn-primary" id="link-modal-save">儲存</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── User modal ── -->
+<div class="modal-overlay hidden" id="user-modal">
+  <div class="modal-box">
+    <h3 id="user-modal-title">新增用戶</h3>
+    <input type="hidden" id="um-editing">
+
+    <div class="form-row">
+      <label>帳號 ID</label>
+      <input type="text" id="um-id" placeholder="yk（建立後不可改）">
+    </div>
+    <div class="form-row">
+      <label>顯示名稱</label>
+      <input type="text" id="um-username" placeholder="楊凱">
+    </div>
+    <div class="form-row">
+      <label>密碼</label>
+      <input type="text" id="um-password" placeholder="編輯時留空則不更改">
+    </div>
+    <div class="form-row">
+      <label>角色</label>
+      <select id="um-role">
+        <option value="user">user</option>
+        <option value="admin">admin</option>
+      </select>
+    </div>
+
+    <div class="modal-actions">
+      <button class="btn" id="user-modal-cancel">取消</button>
+      <button class="btn btn-primary" id="user-modal-save">儲存</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script src="admin.js"></script>
+</body>
+</html>
