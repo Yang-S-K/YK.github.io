@@ -234,6 +234,16 @@
       </div>
       <button class="btn btn-primary" id="save-show-search">儲存</button>
     </div>
+    <div class="setting-row">
+      <div class="setting-label">顯示語錄區塊</div>
+      <div class="setting-value">
+        <select id="setting-show-quotes">
+          <option value="true">顯示</option>
+          <option value="false">隱藏</option>
+        </select>
+      </div>
+      <button class="btn btn-primary" id="save-show-quotes">儲存</button>
+    </div>
   </div>
 
   <div class="settings-section">
@@ -362,6 +372,23 @@
     <div class="form-row">
       <label>自訂 Favicon URL（留空自動抓取）</label>
       <input type="text" id="lm-favicon" placeholder="https://...（可留空）">
+    </div>
+    <div class="form-row">
+      <label>可見性</label>
+      <select id="lm-visibility">
+        <option value="public">public — 所有人</option>
+        <option value="password">password — 需要密碼</option>
+        <option value="users">users — 指定帳號</option>
+        <option value="passwordOrUsers">passwordOrUsers — 密碼或指定帳號</option>
+      </select>
+    </div>
+    <div class="form-row" id="lm-password-row">
+      <label>密碼</label>
+      <input type="text" id="lm-password" placeholder="解鎖密碼">
+    </div>
+    <div class="form-row" id="lm-users-row">
+      <label>允許的帳號 ID（每行一個）</label>
+      <textarea id="lm-allowed-users" rows="2" placeholder="yk&#10;friend1"></textarea>
     </div>
     <div class="form-row">
       <label style="display:flex;align-items:center;gap:0.5rem;">

@@ -347,6 +347,78 @@ a.link-item:hover {
   background-color: var(--card-hover);
 }
 
+div.link-item.locked {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.3rem;
+  background-color: var(--card-bg);
+  padding: 0.8rem 1rem;
+  border-radius: 8px;
+  text-align: center;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.5);
+  color: var(--text-color);
+  font-size: 0.9rem;
+  font-weight: bold;
+  cursor: pointer;
+  border: 1px dashed var(--section-border);
+  opacity: 0.75;
+  position: relative;
+}
+
+div.link-item.locked:hover { opacity: 1; background-color: var(--card-hover); }
+
+.link-unlock-form {
+  width: 100%;
+  margin-top: 0.5rem;
+  text-align: left;
+}
+
+.link-unlock-form .lu-pwd {
+  width: 100%;
+  padding: 0.3rem 0.4rem;
+  border-radius: 5px;
+  border: 1px solid var(--preview-border);
+  background: var(--bg-color);
+  color: var(--text-color);
+  font-size: 0.8rem;
+  box-sizing: border-box;
+  margin-bottom: 0.3rem;
+}
+
+.link-unlock-form .lu-error {
+  color: var(--danger);
+  font-size: 0.75rem;
+  min-height: 1em;
+}
+
+.link-unlock-form .lu-actions {
+  display: flex;
+  gap: 0.3rem;
+  margin-top: 0.2rem;
+}
+
+.link-unlock-form button {
+  flex: 1;
+  padding: 0.25rem 0;
+  font-size: 0.75rem;
+  border-radius: 5px;
+  border: 1px solid var(--preview-border);
+  cursor: pointer;
+}
+
+.link-unlock-form .lu-submit {
+  background: var(--link-color);
+  color: #111;
+  border-color: var(--link-color);
+  font-weight: bold;
+}
+
+.link-unlock-form .lu-cancel {
+  background: var(--card-bg);
+  color: var(--text-color);
+}
+
 a.link-item .favicon {
   width: 20px;
   height: 20px;

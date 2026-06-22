@@ -5,11 +5,13 @@
 //           visibility | password | allowed_users | is_visible | note | type
 //
 // Links:    link_id | section_id | name | url | order | is_visible |
-//           pinned | clicks | last_clicked | favicon_url
+//           pinned | clicks | last_clicked | favicon_url |
+//           visibility | password | allowed_users
 //
 // Users:    user_id | username | password | role
 //
 // Settings: key | value
+//   keys: page_title, show_search, show_quotes, header_links
 //
 // Quotes:   quote_id | text | order | is_active
 //
@@ -89,18 +91,17 @@ function doGet(e) {
     }
     const userIsAdmin = userObj && userObj.role === 'admin';
 
-    // ── Sections（含 visibility 過濾 + lock 判斷）──
+    // ── Sections（visibility 過濾 + lock 判斷）──
     const sections = [];
     allSections.forEach(s => {
       const v = s.visibility;
       const allowedList = String(s.allowed_users || '').split(',').map(x => x.trim()).filter(Boolean);
-      const userAllowed = userObj && (userIsAdmin || allowedList.includes(userId));
+      const userAllowed = userObj && (userIsAdmin || allowedList.includes(String(userId)));
 
       let include = false, locked = false;
-
-      if (v === 'public')            { include = true; }
-      else if (v === 'password')     { include = true; locked = true; }
-      else if (v === 'users')        { include = userAllowed; }
+      if (v === 'public')               { include = true; }
+      else if (v === 'password')        { include = true; locked = !userIsAdmin; }
+      else if (v === 'users')           { include = userAllowed; }
       else if (v === 'passwordOrUsers') { include = true; locked = !userAllowed; }
 
       if (include) {
@@ -120,22 +121,58 @@ function doGet(e) {
       }
     });
 
-    const lockedIds  = new Set(sections.filter(s => s.locked).map(s => s.section_id));
-    const visibleIds = new Set(sections.map(s => s.section_id));
+    const lockedSectionIds = new Set(sections.filter(s => s.locked).map(s => s.section_id));
+    const visibleSectionIds = new Set(sections.map(s => s.section_id));
 
-    const links = allLinks
-      .filter(l => visibleIds.has(l.section_id) && !lockedIds.has(l.section_id))
-      .map(l => ({
-        link_id:     l.link_id,
-        section_id:  l.section_id,
-        name:        l.name,
-        url:         l.url,
-        order:       Number(l.order),
-        pinned:      isTrue(l.pinned),
-        clicks:      Number(l.clicks) || 0,
-        last_clicked: l.last_clicked ? String(l.last_clicked) : '',
-        favicon_url: l.favicon_url || '',
-      }));
+    // ── Links（admin 看全部；非 admin 依 section lock + link visibility 過濾）──
+    let links;
+    if (userIsAdmin) {
+      links = allLinks
+        .filter(l => visibleSectionIds.has(l.section_id))
+        .map(l => ({
+          link_id:       l.link_id,
+          section_id:    l.section_id,
+          name:          l.name,
+          url:           l.url,
+          order:         Number(l.order),
+          pinned:        isTrue(l.pinned),
+          clicks:        Number(l.clicks) || 0,
+          last_clicked:  l.last_clicked ? String(l.last_clicked) : '',
+          favicon_url:   l.favicon_url || '',
+          locked:        false,
+          visibility:    l.visibility || 'public',
+          allowed_users: String(l.allowed_users || ''),
+        }));
+    } else {
+      links = allLinks
+        .filter(l => visibleSectionIds.has(l.section_id) && !lockedSectionIds.has(l.section_id))
+        .map(l => {
+          const lv = l.visibility || 'public';
+          const lAllowed = String(l.allowed_users || '').split(',').map(x => x.trim()).filter(Boolean);
+          const lUserAllowed = userObj && lAllowed.includes(String(userId));
+
+          let lInclude = true, lLocked = false;
+          if (lv === 'public')              { lInclude = true; }
+          else if (lv === 'password')       { lInclude = true; lLocked = true; }
+          else if (lv === 'users')          { lInclude = lUserAllowed; }
+          else if (lv === 'passwordOrUsers') { lInclude = true; lLocked = !lUserAllowed; }
+
+          if (!lInclude) return null;
+          return {
+            link_id:     l.link_id,
+            section_id:  l.section_id,
+            name:        l.name,
+            url:         lLocked ? '' : l.url,
+            order:       Number(l.order),
+            pinned:      isTrue(l.pinned) && !lLocked,
+            clicks:      Number(l.clicks) || 0,
+            last_clicked: l.last_clicked ? String(l.last_clicked) : '',
+            favicon_url: lLocked ? '' : (l.favicon_url || ''),
+            locked:      lLocked,
+          };
+        })
+        .filter(Boolean);
+    }
 
     const currentUser = userObj
       ? { user_id: userObj.user_id, username: userObj.username, role: userObj.role }
@@ -162,13 +199,14 @@ function doGet(e) {
     }
 
     // ── Quotes ──
+    // null = Quotes sheet 不存在（未部署新版）; [] = 存在但全部停用
     const quotesSheet = ss.getSheetByName('Quotes');
     const quotes = quotesSheet
       ? sheetToObjects(quotesSheet)
           .filter(q => isTrue(q.is_active))
           .sort((a, b) => Number(a.order) - Number(b.order))
           .map(q => ({ quote_id: q.quote_id, text: String(q.text) }))
-      : [];
+      : null;
 
     let allQuotes = null;
     if (userIsAdmin && quotesSheet) {
@@ -230,11 +268,22 @@ function doPost(e) {
         .filter(l => String(l.section_id) === String(params.section_id) && isTrue(l.is_visible))
         .sort((a, b) => Number(a.order) - Number(b.order))
         .map(l => ({
-          link_id: l.link_id, section_id: l.section_id, name: l.name, url: l.url,
-          order: Number(l.order), pinned: isTrue(l.pinned),
-          clicks: Number(l.clicks) || 0, favicon_url: l.favicon_url || '',
+          link_id: l.link_id, section_id: l.section_id,
+          name: l.name, url: l.url, order: Number(l.order),
+          pinned: isTrue(l.pinned), clicks: Number(l.clicks) || 0,
+          favicon_url: l.favicon_url || '', locked: false,
         }));
       return jsonResponse({ success: true, links });
+    }
+
+    // ── 驗證 Link 密碼 ──
+    if (params.action === 'verify_link_password') {
+      const links = sheetToObjects(ss.getSheetByName('Links'));
+      const link = links.find(l => String(l.link_id) === String(params.link_id));
+      if (!link) return jsonResponse({ success: false, message: '找不到連結' });
+      if (String(link.password) !== String(params.password))
+        return jsonResponse({ success: false, message: '密碼錯誤' });
+      return jsonResponse({ success: true, url: link.url, favicon_url: link.favicon_url || '' });
     }
 
     // ── 記錄點擊 ──
@@ -332,7 +381,11 @@ function doPost(e) {
       const secLinks = data.slice(1).filter(r => String(r[1]) === String(params.section_id));
       const maxOrder = secLinks.length > 0 ? Math.max(...secLinks.map(r => Number(r[4]) || 0)) : 0;
       const newId = generateId('l');
-      sheet.appendRow([newId, params.section_id, params.name, params.url, maxOrder + 1, true, false, 0, '', params.favicon_url || '']);
+      sheet.appendRow([
+        newId, params.section_id, params.name, params.url, maxOrder + 1,
+        true, false, 0, '', params.favicon_url || '',
+        params.visibility || 'public', params.password || '', params.allowed_users || '',
+      ]);
       return jsonResponse({ success: true, link_id: newId });
     }
 
@@ -341,6 +394,7 @@ function doPost(e) {
       const ok = updateRow(sheet, 'link_id', params.link_id, {
         name: params.name, url: params.url, section_id: params.section_id,
         is_visible: params.is_visible, pinned: params.pinned, favicon_url: params.favicon_url,
+        visibility: params.visibility, password: params.password, allowed_users: params.allowed_users,
       });
       return jsonResponse({ success: ok, message: ok ? undefined : '找不到連結' });
     }
@@ -510,15 +564,21 @@ function setupSheets() {
   }
 
   ensureSheet('Sections', ['section_id','name','order','dark_color','light_color','text_color','visibility','password','allowed_users','is_visible','note','type']);
-  ensureSheet('Links',    ['link_id','section_id','name','url','order','is_visible','pinned','clicks','last_clicked','favicon_url']);
-  ensureSheet('Users',    ['user_id','username','password','role']);
+  const linksSheet = ensureSheet('Links', ['link_id','section_id','name','url','order','is_visible','pinned','clicks','last_clicked','favicon_url','visibility','password','allowed_users']);
+  ensureSheet('Users', ['user_id','username','password','role']);
 
   // Settings with defaults
   const settingsSheet = ensureSheet('Settings', ['key','value']);
   if (settingsSheet.getLastRow() <= 1) {
     settingsSheet.appendRow(['page_title', '楊凱網頁快速連接']);
     settingsSheet.appendRow(['show_search', 'true']);
+    settingsSheet.appendRow(['show_quotes', 'true']);
     settingsSheet.appendRow(['header_links', JSON.stringify([{ name: 'WebRTC服務', url: 'https://yang-s-k.github.io/web_RTC/' }])]);
+  } else {
+    const rows = sheetToObjects(settingsSheet);
+    if (!rows.find(r => r.key === 'show_quotes')) {
+      settingsSheet.appendRow(['show_quotes', 'true']);
+    }
   }
 
   // Quotes with defaults
@@ -544,7 +604,7 @@ function setupSheets() {
     });
   }
 
-  // 幫既有 Sections 表補上 type 欄（如果沒有的話）
+  // 幫既有 Sections 表補上 type 欄
   const sectSheet = ss.getSheetByName('Sections');
   if (sectSheet && sectSheet.getLastRow() > 0) {
     const headers = sectSheet.getRange(1, 1, 1, sectSheet.getLastColumn()).getValues()[0];
@@ -555,6 +615,20 @@ function setupSheets() {
         sectSheet.getRange(2, newCol, sectSheet.getLastRow() - 1, 1).setValue('links');
       }
     }
+  }
+
+  // 幫既有 Links 表補上 visibility / password / allowed_users 欄
+  if (linksSheet && linksSheet.getLastRow() > 0) {
+    const lHeaders = linksSheet.getRange(1, 1, 1, linksSheet.getLastColumn()).getValues()[0];
+    ['visibility', 'password', 'allowed_users'].forEach(col => {
+      if (!lHeaders.includes(col)) {
+        const newCol = linksSheet.getLastColumn() + 1;
+        linksSheet.getRange(1, newCol).setValue(col);
+        if (col === 'visibility' && linksSheet.getLastRow() > 1) {
+          linksSheet.getRange(2, newCol, linksSheet.getLastRow() - 1, 1).setValue('public');
+        }
+      }
+    });
   }
 
   Logger.log('工作表設定完成');

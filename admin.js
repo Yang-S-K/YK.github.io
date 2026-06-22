@@ -342,14 +342,27 @@ function populateLinkSectionDropdown(selectedId = '') {
   ).join('');
 }
 
+function updateLinkVisibilityFields() {
+  const v = document.getElementById('lm-visibility').value;
+  document.getElementById('lm-password-row').style.display =
+    (v === 'password' || v === 'passwordOrUsers') ? '' : 'none';
+  document.getElementById('lm-users-row').style.display =
+    (v === 'users' || v === 'passwordOrUsers') ? '' : 'none';
+}
+
 function openLinkModal(link = null) {
   document.getElementById('link-modal-title').textContent = link ? '編輯連結' : '新增連結';
-  document.getElementById('lm-id').value       = link?.link_id     || '';
-  document.getElementById('lm-name').value     = link?.name        || '';
-  document.getElementById('lm-url').value      = link?.url         || '';
-  document.getElementById('lm-favicon').value  = link?.favicon_url || '';
-  document.getElementById('lm-pinned').checked  = link?.pinned     || false;
-  document.getElementById('lm-visible').checked = link?.is_visible !== false;
+  document.getElementById('lm-id').value        = link?.link_id      || '';
+  document.getElementById('lm-name').value      = link?.name         || '';
+  document.getElementById('lm-url').value       = link?.url          || '';
+  document.getElementById('lm-favicon').value   = link?.favicon_url  || '';
+  document.getElementById('lm-visibility').value = link?.visibility  || 'public';
+  document.getElementById('lm-password').value  = link?.password     || '';
+  document.getElementById('lm-allowed-users').value =
+    (link?.allowed_users || '').split(',').filter(Boolean).join('\n');
+  document.getElementById('lm-pinned').checked   = link?.pinned      || false;
+  document.getElementById('lm-visible').checked  = link?.is_visible !== false;
+  updateLinkVisibilityFields();
   const filterVal = document.getElementById('link-filter-select').value;
   populateLinkSectionDropdown(link?.section_id || filterVal || state.sections[0]?.section_id || '');
   document.getElementById('link-modal').classList.remove('hidden');
@@ -362,13 +375,17 @@ async function saveLinkModal() {
   if (!name || !url) { toast('請填寫名稱與網址', true); return; }
 
   const payload = {
-    action:      id ? 'update_link' : 'add_link',
-    link_id:     id || undefined,
-    section_id:  document.getElementById('lm-section').value,
+    action:        id ? 'update_link' : 'add_link',
+    link_id:       id || undefined,
+    section_id:    document.getElementById('lm-section').value,
     name, url,
-    favicon_url: document.getElementById('lm-favicon').value.trim(),
-    pinned:      document.getElementById('lm-pinned').checked,
-    is_visible:  document.getElementById('lm-visible').checked,
+    favicon_url:   document.getElementById('lm-favicon').value.trim(),
+    visibility:    document.getElementById('lm-visibility').value,
+    password:      document.getElementById('lm-password').value,
+    allowed_users: document.getElementById('lm-allowed-users').value
+      .split('\n').map(s => s.trim()).filter(Boolean).join(','),
+    pinned:        document.getElementById('lm-pinned').checked,
+    is_visible:    document.getElementById('lm-visible').checked,
   };
 
   const res = await apiPost(payload);
@@ -501,6 +518,9 @@ function renderInterface() {
 
   const showSearchSel = document.getElementById('setting-show-search');
   if (showSearchSel) showSearchSel.value = getVal('show_search') || 'true';
+
+  const showQuotesSel = document.getElementById('setting-show-quotes');
+  if (showQuotesSel) showQuotesSel.value = getVal('show_quotes') || 'true';
 
   renderHeaderLinks();
   renderQuotes();
@@ -715,6 +735,7 @@ document.getElementById('link-modal').addEventListener('click', e => {
 });
 document.getElementById('link-filter-select').addEventListener('change', e => renderLinks(e.target.value));
 document.getElementById('link-search').addEventListener('input', () => renderLinks(document.getElementById('link-filter-select').value));
+document.getElementById('lm-visibility').addEventListener('change', updateLinkVisibilityFields);
 
 document.getElementById('add-user-btn').addEventListener('click', () => openUserModal());
 document.getElementById('user-modal-cancel').addEventListener('click', closeUserModal);
@@ -730,6 +751,9 @@ document.getElementById('save-page-title').addEventListener('click', () => {
 });
 document.getElementById('save-show-search').addEventListener('click', () => {
   saveSetting('show_search', document.getElementById('setting-show-search').value);
+});
+document.getElementById('save-show-quotes').addEventListener('click', () => {
+  saveSetting('show_quotes', document.getElementById('setting-show-quotes').value);
 });
 
 document.getElementById('add-header-link-btn').addEventListener('click', () => openHeaderLinkModal());

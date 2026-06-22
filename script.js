@@ -75,8 +75,16 @@ const FALLBACK_QUOTES = [
 ];
 
 let activeQuotes = [...FALLBACK_QUOTES];
+let quotesFromAPI = false; // true 之後，空陣列代表全部停用而不是 fallback
 
 function updateQuote() {
+  const box = document.getElementById('quote-box');
+  // 已從 API 拿到資料且沒有啟用的語錄 → 隱藏整個區塊
+  if (quotesFromAPI && activeQuotes.length === 0) {
+    box.style.display = 'none';
+    return;
+  }
+  box.style.display = '';
   const list = activeQuotes.length ? activeQuotes : FALLBACK_QUOTES;
   const raw = list[Math.floor(Math.random() * list.length)];
   document.getElementById('quote-line').innerHTML = raw.replace(/\n/g, '<br>');
@@ -98,6 +106,12 @@ function applySettings(settings) {
     searchBox.style.display = 'none';
   } else {
     searchBox.style.display = '';
+  }
+  const quoteBox = document.getElementById('quote-box');
+  if (settings.show_quotes === 'false' || settings.show_quotes === false) {
+    quoteBox.style.display = 'none';
+  } else if (!quotesFromAPI || activeQuotes.length > 0) {
+    quoteBox.style.display = '';
   }
 }
 
@@ -139,6 +153,10 @@ async function verifyPassword(sectionId, password) {
   return apiPost({ action: 'verify_section_password', section_id: sectionId, password });
 }
 
+async function verifyLinkPassword(linkId, password) {
+  return apiPost({ action: 'verify_link_password', link_id: linkId, password });
+}
+
 function trackClick(linkId) {
   apiPost({ action: 'track_click', link_id: linkId }).catch(() => {});
 }
@@ -146,6 +164,8 @@ function trackClick(linkId) {
 // ── Render helpers ────────────────────────────────────────────────────────────
 
 function makeLinkAnchor(link) {
+  if (link.locked) return makeLockedLinkItem(link);
+
   const a = document.createElement('a');
   a.className = 'link-item';
   a.href = link.url;
@@ -177,6 +197,55 @@ function makeLinkAnchor(link) {
   });
 
   return a;
+}
+
+function makeLockedLinkItem(link) {
+  const wrapper = document.createElement('div');
+  wrapper.className = 'link-item locked';
+
+  const nameEl = document.createElement('span');
+  nameEl.textContent = '🔒 ' + link.name;
+  wrapper.appendChild(nameEl);
+
+  wrapper.addEventListener('click', () => {
+    const existing = wrapper.querySelector('.link-unlock-form');
+    if (existing) { existing.remove(); return; }
+
+    const form = document.createElement('div');
+    form.className = 'link-unlock-form';
+    form.innerHTML = `
+      <input type="password" placeholder="輸入密碼" class="lu-pwd">
+      <div class="lu-error"></div>
+      <div class="lu-actions">
+        <button class="lu-submit">解鎖</button>
+        <button class="lu-cancel">取消</button>
+      </div>
+    `;
+    wrapper.appendChild(form);
+
+    form.querySelector('.lu-cancel').addEventListener('click', e => { e.stopPropagation(); form.remove(); });
+    form.querySelector('.lu-submit').addEventListener('click', async e => {
+      e.stopPropagation();
+      const pwd = form.querySelector('.lu-pwd').value;
+      const btn = form.querySelector('.lu-submit');
+      btn.disabled = true;
+      const result = await verifyLinkPassword(link.link_id, pwd);
+      btn.disabled = false;
+      if (result.success) {
+        form.remove();
+        window.open(result.url, '_blank');
+        trackClick(link.link_id);
+      } else {
+        form.querySelector('.lu-error').textContent = result.message || '密碼錯誤';
+      }
+    });
+    form.querySelector('.lu-pwd').addEventListener('keydown', e => {
+      if (e.key === 'Enter') form.querySelector('.lu-submit').click();
+      e.stopPropagation();
+    });
+  });
+
+  return wrapper;
 }
 
 function renderPinned(links) {
@@ -488,7 +557,11 @@ async function init() {
   if (cached) {
     applySettings(cached.settings);
     renderHeaderLinks(cached.settings?.header_links);
-    if (cached.quotes?.length) activeQuotes = cached.quotes.map(q => q.text);
+    if (Array.isArray(cached.quotes)) {
+      quotesFromAPI = true;
+      activeQuotes = cached.quotes.map(q => q.text);
+    }
+    updateQuote();
     renderAll(cached.sections || [], cached.links || []);
   } else {
     showSkeleton();
@@ -500,7 +573,8 @@ async function init() {
       setCachedData(data);
       applySettings(data.settings);
       renderHeaderLinks(data.settings?.header_links);
-      if (data.quotes?.length) {
+      if (Array.isArray(data.quotes)) {
+        quotesFromAPI = true;
         activeQuotes = data.quotes.map(q => q.text);
         updateQuote();
       }
