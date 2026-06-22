@@ -341,7 +341,7 @@ function renderNote(section, container) {
 
   const display = document.createElement('div');
   display.className = 'section-content-note';
-  display.innerHTML = (section.note || '').replace(/\r\n/g, '\n').replace(/\n/g, '<br>');
+  display.innerHTML = String(section.note || '').replace(/\r\n/g, '\n').replace(/\n/g, '<br>');
   wrap.appendChild(display);
 
   if (canEdit) {
@@ -416,7 +416,7 @@ function renderEmbed(section, container) {
   const wrap = document.createElement('div');
   wrap.className = 'section-embed';
   const iframe = document.createElement('iframe');
-  iframe.src = section.note || '';
+  iframe.src = String(section.note || '');
   iframe.allowFullscreen = true;
   wrap.appendChild(iframe);
   container.appendChild(wrap);
@@ -425,7 +425,7 @@ function renderEmbed(section, container) {
 function renderAnnouncement(section, container) {
   const div = document.createElement('div');
   div.className = 'section-announcement';
-  div.innerHTML = (section.note || '').replace(/\r\n/g, '\n').replace(/\n/g, '<br>');
+  div.innerHTML = String(section.note || '').replace(/\r\n/g, '\n').replace(/\n/g, '<br>');
   container.appendChild(div);
 }
 
