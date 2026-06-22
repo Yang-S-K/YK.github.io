@@ -286,6 +286,25 @@ function doPost(e) {
       return jsonResponse({ success: true, url: link.url, favicon_url: link.favicon_url || '' });
     }
 
+    // ── 更新 Note 內容（允許 allowed_users 使用，不需 admin）──
+    if (params.action === 'update_section_note') {
+      if (!params.user_id) return jsonResponse({ success: false, message: '未登入' });
+      const users = sheetToObjects(ss.getSheetByName('Users'));
+      const user = users.find(u => String(u.user_id) === String(params.user_id));
+      if (!user) return jsonResponse({ success: false, message: '找不到使用者' });
+      const sections = sheetToObjects(ss.getSheetByName('Sections'));
+      const section = sections.find(s => String(s.section_id) === String(params.section_id));
+      if (!section) return jsonResponse({ success: false, message: '找不到區塊' });
+      const isAdminUser = user.role === 'admin';
+      const allowedList = String(section.allowed_users || '').split(',').map(x => x.trim()).filter(Boolean);
+      if (!isAdminUser && !allowedList.includes(String(params.user_id))) {
+        return jsonResponse({ success: false, message: '沒有編輯權限' });
+      }
+      const sheet = ss.getSheetByName('Sections');
+      const ok = updateRow(sheet, 'section_id', params.section_id, { note: params.note });
+      return jsonResponse({ success: ok, message: ok ? undefined : '找不到區塊' });
+    }
+
     // ── 記錄點擊 ──
     if (params.action === 'track_click') {
       const sheet = ss.getSheetByName('Links');

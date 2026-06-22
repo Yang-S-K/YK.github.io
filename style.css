@@ -663,3 +663,161 @@ a.link-item .favicon {
 @media (max-width: 768px) {
   .preview-box { display: none; }
 }
+
+/* ── Note inline edit ────────────────────────────────── */
+
+.section-note-wrap { position: relative; }
+
+.note-edit-btn {
+  font-size: 0.75rem;
+  padding: 0.2rem 0.5rem;
+  background: none;
+  border: 1px dashed var(--section-border);
+  border-radius: 5px;
+  color: var(--text-color);
+  opacity: 0.5;
+  cursor: pointer;
+  margin-top: 0.5rem;
+  display: block;
+}
+
+.note-edit-btn:hover { opacity: 1; background: var(--card-hover); }
+
+.note-edit-textarea {
+  display: block;
+  width: 100%;
+  min-height: 80px;
+  padding: 0.5rem;
+  border-radius: 6px;
+  border: 1px solid var(--preview-border);
+  background: var(--bg-color);
+  color: var(--text-color);
+  font-size: 0.95rem;
+  line-height: 1.7;
+  resize: vertical;
+  font-family: inherit;
+  box-sizing: border-box;
+  margin-top: 0.5rem;
+}
+
+.note-edit-actions {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.4rem;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.note-save-btn, .note-cancel-btn {
+  padding: 0.3rem 0.9rem;
+  border-radius: 6px;
+  border: 1px solid var(--preview-border);
+  cursor: pointer;
+  font-size: 0.85rem;
+}
+
+.note-save-btn {
+  background: var(--link-color);
+  color: #111;
+  font-weight: bold;
+  border-color: var(--link-color);
+}
+
+.note-cancel-btn {
+  background: var(--card-bg);
+  color: var(--text-color);
+}
+
+.note-edit-error {
+  color: var(--danger);
+  font-size: 0.8rem;
+}
+
+/* ── Header link locked ──────────────────────────────── */
+
+.header-link-locked {
+  padding: 0.4rem 0.8rem;
+  background: var(--card-bg);
+  color: var(--text-color);
+  border: 1px dashed var(--preview-border);
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 0.85rem;
+  white-space: nowrap;
+  opacity: 0.75;
+}
+
+.header-link-locked:hover { opacity: 1; background: var(--card-hover); }
+
+/* ── Header link password modal ──────────────────────── */
+
+.hl-pw-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+}
+
+.hl-pw-box {
+  background: var(--card-bg);
+  padding: 1.5rem;
+  border-radius: 12px;
+  width: 90%;
+  max-width: 320px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.6);
+}
+
+.hl-pw-title {
+  font-size: 1rem;
+  font-weight: bold;
+  margin-bottom: 1rem;
+  color: var(--text-color);
+}
+
+.hl-pw-input {
+  display: block;
+  width: 100%;
+  padding: 0.5rem 0.7rem;
+  margin-bottom: 0.5rem;
+  border-radius: 6px;
+  border: 1px solid var(--preview-border);
+  background: var(--bg-color);
+  color: var(--text-color);
+  font-size: 0.95rem;
+  box-sizing: border-box;
+}
+
+.hl-pw-error {
+  color: var(--danger);
+  font-size: 0.8rem;
+  min-height: 1.2em;
+  margin-bottom: 0.5rem;
+}
+
+.hl-pw-actions {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: flex-end;
+}
+
+.hl-pw-submit {
+  background: var(--link-color);
+  color: #111;
+  border: none;
+  border-radius: 6px;
+  padding: 0.4rem 1rem;
+  cursor: pointer;
+  font-weight: bold;
+}
+
+.hl-pw-cancel {
+  background: var(--card-hover);
+  color: var(--text-color);
+  border: 1px solid var(--preview-border);
+  border-radius: 6px;
+  padding: 0.4rem 1rem;
+  cursor: pointer;
+}

@@ -533,11 +533,20 @@ async function saveSetting(key, value) {
 
 // ── Header links ──────────────────────────────────────────────────────────────
 
+function updateHeaderLinkVisibilityFields() {
+  const v = document.getElementById('hlm-visibility').value;
+  document.getElementById('hlm-password-row').style.display =
+    (v === 'password' || v === 'passwordOrUsers') ? '' : 'none';
+  document.getElementById('hlm-users-row').style.display =
+    (v === 'users' || v === 'passwordOrUsers') ? '' : 'none';
+}
+
 function renderHeaderLinks() {
   const list = document.getElementById('header-links-list');
   list.innerHTML = '';
 
   state.headerLinks.forEach((item, idx) => {
+    const vis = item.visibility || 'public';
     const row = document.createElement('div');
     row.className = 'list-item';
     row.innerHTML = `
@@ -545,6 +554,7 @@ function renderHeaderLinks() {
         ${item.name}
         <div class="item-sub">${item.url}</div>
       </div>
+      <span class="badge ${vis}">${vis}</span>
       <div class="item-actions">
         <button class="btn" data-hl-edit="${idx}">編輯</button>
         <button class="btn btn-danger" data-hl-delete="${idx}">刪除</button>
@@ -560,9 +570,14 @@ function openHeaderLinkModal(index = null) {
   const isEdit = index !== null && index >= 0;
   const item = isEdit ? state.headerLinks[index] : null;
   document.getElementById('header-link-modal-title').textContent = isEdit ? '編輯 Header 連結' : '新增 Header 連結';
-  document.getElementById('hlm-index').value = isEdit ? index : -1;
-  document.getElementById('hlm-name').value  = item?.name || '';
-  document.getElementById('hlm-url').value   = item?.url  || '';
+  document.getElementById('hlm-index').value      = isEdit ? index : -1;
+  document.getElementById('hlm-name').value       = item?.name || '';
+  document.getElementById('hlm-url').value        = item?.url  || '';
+  document.getElementById('hlm-visibility').value = item?.visibility || 'public';
+  document.getElementById('hlm-password').value   = item?.password || '';
+  document.getElementById('hlm-allowed-users').value =
+    (item?.allowed_users || '').split(',').filter(Boolean).join('\n');
+  updateHeaderLinkVisibilityFields();
   document.getElementById('header-link-modal').classList.remove('hidden');
 }
 
@@ -571,14 +586,23 @@ function closeHeaderLinkModal() {
 }
 
 async function saveHeaderLinkModal() {
-  const index = parseInt(document.getElementById('hlm-index').value);
-  const name  = document.getElementById('hlm-name').value.trim();
-  const url   = document.getElementById('hlm-url').value.trim();
+  const index      = parseInt(document.getElementById('hlm-index').value);
+  const name       = document.getElementById('hlm-name').value.trim();
+  const url        = document.getElementById('hlm-url').value.trim();
   if (!name || !url) { toast('請填寫名稱與網址', true); return; }
 
+  const visibility    = document.getElementById('hlm-visibility').value;
+  const password      = document.getElementById('hlm-password').value;
+  const allowedUsers  = document.getElementById('hlm-allowed-users').value
+    .split('\n').map(s => s.trim()).filter(Boolean).join(',');
+
+  const obj = { name, url, visibility };
+  if (password)     obj.password      = password;
+  if (allowedUsers) obj.allowed_users = allowedUsers;
+
   const links = [...state.headerLinks];
-  if (index >= 0) { links[index] = { name, url }; }
-  else { links.push({ name, url }); }
+  if (index >= 0) { links[index] = obj; }
+  else { links.push(obj); }
 
   const res = await apiPost({ action: 'update_setting', key: 'header_links', value: JSON.stringify(links) });
   if (res.success) {
@@ -762,6 +786,7 @@ document.getElementById('header-link-modal-save').addEventListener('click', save
 document.getElementById('header-link-modal').addEventListener('click', e => {
   if (e.target === document.getElementById('header-link-modal')) closeHeaderLinkModal();
 });
+document.getElementById('hlm-visibility').addEventListener('change', updateHeaderLinkVisibilityFields);
 
 document.getElementById('add-quote-btn').addEventListener('click', () => openQuoteModal());
 document.getElementById('quote-modal-cancel').addEventListener('click', closeQuoteModal);
@@ -774,4 +799,5 @@ document.getElementById('quote-modal').addEventListener('click', e => {
 
 initColorPresets();
 updateVisibilityFields();
+updateHeaderLinkVisibilityFields();
 refresh();

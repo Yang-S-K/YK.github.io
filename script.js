@@ -117,10 +117,24 @@ function applySettings(settings) {
 
 function renderHeaderLinks(headerLinks) {
   if (!Array.isArray(headerLinks)) return;
+  const user = getUser();
+  const userId = user?.user_id ? String(user.user_id) : null;
+  const isAdminUser = user?.role === 'admin';
   const container = document.getElementById('header-links-container');
   container.innerHTML = '';
+
   headerLinks.forEach(item => {
     if (!item.name || !item.url) return;
+    const vis = item.visibility || 'public';
+    const allowedList = String(item.allowed_users || '').split(',').map(x => x.trim()).filter(Boolean);
+    const userInAllowed = userId && allowedList.includes(userId);
+
+    if (!isAdminUser) {
+      if (vis === 'users' && !userInAllowed) return;
+      if (vis === 'password') { container.appendChild(makeLockedHeaderLink(item)); return; }
+      if (vis === 'passwordOrUsers' && !userInAllowed) { container.appendChild(makeLockedHeaderLink(item)); return; }
+    }
+
     const a = document.createElement('a');
     a.href = item.url;
     a.target = '_blank';
@@ -128,6 +142,52 @@ function renderHeaderLinks(headerLinks) {
     a.textContent = item.name;
     container.appendChild(a);
   });
+}
+
+function makeLockedHeaderLink(item) {
+  const btn = document.createElement('button');
+  btn.className = 'header-link-locked';
+  btn.textContent = '🔒 ' + item.name;
+  btn.addEventListener('click', () => {
+    const existing = document.getElementById('hl-pw-modal');
+    if (existing) existing.remove();
+
+    const overlay = document.createElement('div');
+    overlay.id = 'hl-pw-modal';
+    overlay.className = 'hl-pw-overlay';
+    overlay.innerHTML = `
+      <div class="hl-pw-box">
+        <div class="hl-pw-title">🔒 ${item.name}</div>
+        <input type="password" class="hl-pw-input" placeholder="輸入密碼">
+        <div class="hl-pw-error"></div>
+        <div class="hl-pw-actions">
+          <button class="hl-pw-submit">解鎖</button>
+          <button class="hl-pw-cancel">取消</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(overlay);
+
+    const pwInput = overlay.querySelector('.hl-pw-input');
+    const pwErr = overlay.querySelector('.hl-pw-error');
+    const submitBtn = overlay.querySelector('.hl-pw-submit');
+
+    const tryUnlock = () => {
+      if (pwInput.value === String(item.password || '')) {
+        overlay.remove();
+        window.open(item.url, '_blank');
+      } else {
+        pwErr.textContent = '密碼錯誤';
+      }
+    };
+
+    submitBtn.addEventListener('click', tryUnlock);
+    overlay.querySelector('.hl-pw-cancel').addEventListener('click', () => overlay.remove());
+    overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+    pwInput.addEventListener('keydown', e => { if (e.key === 'Enter') tryUnlock(); });
+    pwInput.focus();
+  });
+  return btn;
 }
 
 // ── API ───────────────────────────────────────────────────────────────────────
@@ -282,10 +342,78 @@ function renderLinkGrid(links, container, section) {
 // ── Section type renderers ────────────────────────────────────────────────────
 
 function renderNote(section, container) {
-  const div = document.createElement('div');
-  div.className = 'section-content-note';
-  div.innerHTML = (section.note || '').replace(/\n/g, '<br>');
-  container.appendChild(div);
+  const user = getUser();
+  const allowedList = String(section.allowed_users || '').split(',').map(x => x.trim()).filter(Boolean);
+  const canEdit = user && (user.role === 'admin' || allowedList.includes(String(user.user_id)));
+
+  const wrap = document.createElement('div');
+  wrap.className = 'section-note-wrap';
+
+  const display = document.createElement('div');
+  display.className = 'section-content-note';
+  display.innerHTML = (section.note || '').replace(/\n/g, '<br>');
+  wrap.appendChild(display);
+
+  if (canEdit) {
+    const editBtn = document.createElement('button');
+    editBtn.className = 'note-edit-btn';
+    editBtn.textContent = '✏️ 編輯';
+    wrap.appendChild(editBtn);
+
+    editBtn.addEventListener('click', () => {
+      editBtn.style.display = 'none';
+      display.style.display = 'none';
+
+      const textarea = document.createElement('textarea');
+      textarea.className = 'note-edit-textarea';
+      textarea.value = section.note || '';
+
+      const saveBtn = document.createElement('button');
+      saveBtn.className = 'note-save-btn';
+      saveBtn.textContent = '儲存';
+
+      const cancelBtn = document.createElement('button');
+      cancelBtn.className = 'note-cancel-btn';
+      cancelBtn.textContent = '取消';
+
+      const actions = document.createElement('div');
+      actions.className = 'note-edit-actions';
+      actions.appendChild(saveBtn);
+      actions.appendChild(cancelBtn);
+
+      wrap.appendChild(textarea);
+      wrap.appendChild(actions);
+
+      cancelBtn.addEventListener('click', () => {
+        textarea.remove();
+        actions.remove();
+        display.style.display = '';
+        editBtn.style.display = '';
+      });
+
+      saveBtn.addEventListener('click', async () => {
+        const newNote = textarea.value;
+        saveBtn.disabled = true;
+        const result = await apiPost({ action: 'update_section_note', section_id: section.section_id, note: newNote });
+        saveBtn.disabled = false;
+        if (result.success) {
+          section.note = newNote;
+          display.innerHTML = newNote.replace(/\n/g, '<br>');
+          textarea.remove();
+          actions.remove();
+          display.style.display = '';
+          editBtn.style.display = '';
+        } else {
+          const err = document.createElement('div');
+          err.className = 'note-edit-error';
+          err.textContent = result.message || '儲存失敗';
+          actions.appendChild(err);
+        }
+      });
+    });
+  }
+
+  container.appendChild(wrap);
 }
 
 function renderEmbed(section, container) {

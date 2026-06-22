@@ -478,6 +478,23 @@
       <label>網址</label>
       <input type="url" id="hlm-url" placeholder="https://...">
     </div>
+    <div class="form-row">
+      <label>可見性</label>
+      <select id="hlm-visibility">
+        <option value="public">public — 所有人</option>
+        <option value="password">password — 需要密碼</option>
+        <option value="users">users — 指定帳號</option>
+        <option value="passwordOrUsers">passwordOrUsers — 密碼或指定帳號</option>
+      </select>
+    </div>
+    <div class="form-row" id="hlm-password-row">
+      <label>密碼</label>
+      <input type="text" id="hlm-password" placeholder="解鎖密碼">
+    </div>
+    <div class="form-row" id="hlm-users-row">
+      <label>允許的帳號 ID（每行一個）</label>
+      <textarea id="hlm-allowed-users" rows="2" placeholder="yk&#10;friend1"></textarea>
+    </div>
 
     <div class="modal-actions">
       <button class="btn" id="header-link-modal-cancel">取消</button>
