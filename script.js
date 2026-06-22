@@ -80,9 +80,8 @@ function updateQuote() {
   const list = activeQuotes.length ? activeQuotes : FALLBACK_QUOTES;
   const raw = list[Math.floor(Math.random() * list.length)];
   document.getElementById('quote-line').innerHTML = raw.replace(/\n/g, '<br>');
-  const d = new Date();
   document.getElementById('quote-date').textContent =
-    `${d.getFullYear()}/${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')}`;
+    new Date().toLocaleDateString('zh-Hant', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' });
 }
 document.getElementById('quote-button').addEventListener('click', updateQuote);
 
@@ -103,9 +102,10 @@ function applySettings(settings) {
 }
 
 function renderHeaderLinks(headerLinks) {
+  if (!Array.isArray(headerLinks)) return;
   const container = document.getElementById('header-links-container');
   container.innerHTML = '';
-  (headerLinks || []).forEach(item => {
+  headerLinks.forEach(item => {
     if (!item.name || !item.url) return;
     const a = document.createElement('a');
     a.href = item.url;
@@ -386,7 +386,7 @@ function updateAuthUI(user) {
     loginBtn.style.display  = 'none';
     userInfo.style.display  = 'flex';
     userLabel.textContent   = user.username;
-    adminBtn.style.display  = user.role === 'admin' ? '' : 'none';
+    adminBtn.style.display  = user.role === 'admin' ? 'inline-block' : 'none';
   } else {
     loginBtn.style.display  = '';
     userInfo.style.display  = 'none';
