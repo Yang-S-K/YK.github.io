@@ -12,7 +12,7 @@
   <div id="top-bar">
     <div id="page-title">楊凱網頁快速連接</div>
     <div id="top-right">
-      <a href="https://yang-s-k.github.io/web_RTC/" target="_blank" rel="noopener">WebRTC服務</a>
+      <div id="header-links-container"></div>
       <button id="admin-btn" onclick="location.href='admin.html'">⚙️ 後台</button>
       <div id="user-info">
         <span id="user-label"></span>
@@ -35,7 +35,7 @@
   </div>
 
   <!-- Search -->
-  <input type="text" id="search-box" placeholder="搜尋連結...">
+  <input type="text" id="search-box" placeholder="搜尋連結..." autocomplete="off">
 
   <!-- Pinned links -->
   <div id="pinned-section" style="display:none;">
@@ -55,8 +55,10 @@
   <div id="login-modal" class="hidden">
     <div class="modal-card">
       <h2>登入</h2>
-      <input type="text"     id="modal-userid"   placeholder="帳號 ID">
-      <input type="password" id="modal-password"  placeholder="密碼">
+      <input type="text"     id="modal-userid"   placeholder="帳號 ID"
+             name="username" autocomplete="username">
+      <input type="password" id="modal-password" placeholder="密碼"
+             name="password" autocomplete="current-password">
       <button class="modal-submit" id="modal-submit">登入系統</button>
       <div id="modal-msg"></div>
       <button class="modal-close" id="modal-close">取消</button>

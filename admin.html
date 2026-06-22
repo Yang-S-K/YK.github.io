@@ -24,7 +24,7 @@
     #topbar a { color: var(--primary); font-size: 0.85rem; text-decoration: none; }
 
     /* ── Tabs ── */
-    #tabs { display: flex; gap: 0; border-bottom: 1px solid var(--border); background: var(--surface); }
+    #tabs { display: flex; gap: 0; border-bottom: 1px solid var(--border); background: var(--surface); flex-wrap: wrap; }
     .tab-btn {
       padding: 0.75rem 1.25rem; border: none; background: none; color: var(--muted);
       cursor: pointer; font-size: 0.9rem; border-bottom: 2px solid transparent;
@@ -68,6 +68,10 @@
     .badge.password     { background: #3a2a1a; color: #ffa726; }
     .badge.users        { background: #1a2a3a; color: #42a5f5; }
     .badge.passwordOrUsers { background: #2a1a3a; color: #ba68c8; }
+    .badge.type-links        { background: #1a2a3a; color: #90caf9; }
+    .badge.type-note         { background: #1a3a2a; color: #66bb6a; }
+    .badge.type-embed        { background: #3a2a1a; color: #ffa726; }
+    .badge.type-announcement { background: #3a1a1a; color: #ef9a9a; }
 
     .toggle-visible { cursor: pointer; font-size: 0.8rem; color: var(--muted); }
     .toggle-visible.on  { color: var(--success); }
@@ -130,6 +134,14 @@
     .user-role { font-size: 0.75rem; padding: 0.1rem 0.4rem; border-radius: 4px; background: var(--surface2); }
     .user-role.admin { background: #2a1a1a; color: #ff7043; }
 
+    /* ── Interface settings ── */
+    .settings-section { margin-bottom: 2rem; }
+    .settings-section h3 { font-size: 0.95rem; margin-bottom: 0.75rem; color: var(--primary); border-bottom: 1px solid var(--border); padding-bottom: 0.4rem; }
+    .setting-row { display: flex; align-items: center; gap: 0.75rem; padding: 0.5rem 0; border-bottom: 1px solid var(--border); }
+    .setting-label { flex: 1; font-size: 0.9rem; }
+    .setting-value { font-size: 0.85rem; color: var(--muted); flex: 2; }
+    .setting-value input, .setting-value select { width: 100%; }
+
     /* ── Toast ── */
     #toast {
       position: fixed; bottom: 1.5rem; left: 50%; transform: translateX(-50%);
@@ -152,6 +164,7 @@
   <button class="tab-btn" data-tab="links">連結</button>
   <button class="tab-btn" data-tab="users">用戶</button>
   <button class="tab-btn" data-tab="checker">連結檢查</button>
+  <button class="tab-btn" data-tab="interface">介面設定</button>
 </div>
 
 <!-- ── Tab: Sections ── -->
@@ -199,6 +212,47 @@
   <div id="checker-results"></div>
 </div>
 
+<!-- ── Tab: Interface Settings ── -->
+<div id="tab-interface" class="tab-panel">
+
+  <div class="settings-section">
+    <h3>基本設定</h3>
+    <div class="setting-row">
+      <div class="setting-label">頁面標題</div>
+      <div class="setting-value">
+        <input type="text" id="setting-page-title" placeholder="楊凱網頁快速連接">
+      </div>
+      <button class="btn btn-primary" id="save-page-title">儲存</button>
+    </div>
+    <div class="setting-row">
+      <div class="setting-label">顯示搜尋欄</div>
+      <div class="setting-value">
+        <select id="setting-show-search">
+          <option value="true">顯示</option>
+          <option value="false">隱藏</option>
+        </select>
+      </div>
+      <button class="btn btn-primary" id="save-show-search">儲存</button>
+    </div>
+  </div>
+
+  <div class="settings-section">
+    <h3>Header 連結</h3>
+    <div id="header-links-list"></div>
+    <button class="btn btn-primary" id="add-header-link-btn" style="margin-top:0.75rem;">+ 新增 Header 連結</button>
+  </div>
+
+  <div class="settings-section">
+    <h3>語錄管理</h3>
+    <div class="panel-header" style="margin-bottom:0.5rem;">
+      <span style="font-size:0.8rem;color:var(--muted);">拖曳可排序，眼睛圖示可切換啟用/停用</span>
+      <button class="btn btn-primary" id="add-quote-btn">+ 新增語錄</button>
+    </div>
+    <div id="quotes-list"></div>
+  </div>
+
+</div>
+
 <!-- ── Section modal ── -->
 <div class="modal-overlay hidden" id="section-modal">
   <div class="modal-box">
@@ -208,6 +262,16 @@
     <div class="form-row">
       <label>名稱</label>
       <input type="text" id="sm-name" placeholder="區塊名稱">
+    </div>
+
+    <div class="form-row">
+      <label>區塊類型</label>
+      <select id="sm-type">
+        <option value="links">links — 連結列表</option>
+        <option value="note">note — 純文字筆記</option>
+        <option value="embed">embed — 嵌入網頁（iframe）</option>
+        <option value="announcement">announcement — 公告/橫幅</option>
+      </select>
     </div>
 
     <div class="form-row">
@@ -259,8 +323,8 @@
     </div>
 
     <div class="form-row">
-      <label>備註（顯示在區塊頂部，支援換行）</label>
-      <textarea id="sm-note" rows="2" placeholder="選填說明文字..."></textarea>
+      <label id="sm-note-label">備註 / 內容（支援換行）</label>
+      <textarea id="sm-note" rows="3" placeholder="選填..."></textarea>
     </div>
 
     <div class="form-row">
@@ -346,6 +410,51 @@
     <div class="modal-actions">
       <button class="btn" id="user-modal-cancel">取消</button>
       <button class="btn btn-primary" id="user-modal-save">儲存</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Quote modal ── -->
+<div class="modal-overlay hidden" id="quote-modal">
+  <div class="modal-box">
+    <h3 id="quote-modal-title">新增語錄</h3>
+    <input type="hidden" id="qm-id">
+
+    <div class="form-row">
+      <label>語錄內容（支援換行，顯示時會自動轉行）</label>
+      <textarea id="qm-text" rows="5" placeholder="輸入語錄文字..."></textarea>
+    </div>
+    <div class="form-row">
+      <label style="display:flex;align-items:center;gap:0.5rem;">
+        <input type="checkbox" id="qm-active" checked> 啟用此語錄
+      </label>
+    </div>
+
+    <div class="modal-actions">
+      <button class="btn" id="quote-modal-cancel">取消</button>
+      <button class="btn btn-primary" id="quote-modal-save">儲存</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Header Link modal ── -->
+<div class="modal-overlay hidden" id="header-link-modal">
+  <div class="modal-box">
+    <h3 id="header-link-modal-title">新增 Header 連結</h3>
+    <input type="hidden" id="hlm-index">
+
+    <div class="form-row">
+      <label>顯示名稱</label>
+      <input type="text" id="hlm-name" placeholder="WebRTC服務">
+    </div>
+    <div class="form-row">
+      <label>網址</label>
+      <input type="url" id="hlm-url" placeholder="https://...">
+    </div>
+
+    <div class="modal-actions">
+      <button class="btn" id="header-link-modal-cancel">取消</button>
+      <button class="btn btn-primary" id="header-link-modal-save">儲存</button>
     </div>
   </div>
 </div>

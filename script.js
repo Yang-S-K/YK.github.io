@@ -1,7 +1,6 @@
-// ── 設定（部署 Apps Script 後替換此 URL）─────────────────────────────────────
 const API_URL = 'https://script.google.com/macros/s/AKfycbzYH2zCpCSSgapEeektdeiEppSzQlwhP0AXxxebaM1vSiIopiec96fQdiTMrWPyAiw-/exec';
 
-// ── Auth helpers ──────────────────────────────────────────────────────────────
+// ── Auth ──────────────────────────────────────────────────────────────────────
 
 function getUser()  { try { return JSON.parse(localStorage.getItem('yk_user')); } catch { return null; } }
 function getToken() { return localStorage.getItem('yk_token'); }
@@ -14,95 +13,52 @@ function clearSession() {
   localStorage.removeItem('yk_token');
 }
 
-// ── Cache helpers (stale-while-revalidate) ─────────────────────────────────────
+// ── Cache ─────────────────────────────────────────────────────────────────────
 
-function getCachedData()       { try { return JSON.parse(localStorage.getItem('yk_page_cache')); } catch { return null; } }
-function setCachedData(data)   { localStorage.setItem('yk_page_cache', JSON.stringify(data)); }
+function getCachedData() {
+  try { return JSON.parse(localStorage.getItem('yk_page_cache')); } catch { return null; }
+}
+function setCachedData(data) {
+  try { localStorage.setItem('yk_page_cache', JSON.stringify(data)); } catch {}
+}
 
-// 記錄本次 session 已解鎖的 section 密碼（key: section_id, value: links[]）
+// ── Session unlock map ────────────────────────────────────────────────────────
+
 const unlockedSections = new Map(
   JSON.parse(sessionStorage.getItem('yk_unlocked') || '[]')
 );
-function persistUnlocked() {
+function saveUnlocked() {
   sessionStorage.setItem('yk_unlocked', JSON.stringify([...unlockedSections.entries()]));
-}
-
-// ── Favicon ───────────────────────────────────────────────────────────────────
-
-function getFaviconUrl(url) {
-  try {
-    const domain = new URL(url).hostname;
-    return `https://www.google.com/s2/favicons?domain=${domain}&sz=32`;
-  } catch { return ''; }
-}
-
-// ── API ───────────────────────────────────────────────────────────────────────
-
-async function fetchPageData() {
-  const user = getUser();
-  const params = user ? `?user_id=${encodeURIComponent(user.user_id)}` : '';
-  const res = await fetch(API_URL + params);
-  const data = await res.json();
-  if (!data.success) throw new Error(data.message);
-  return data;
-}
-
-async function verifyPassword(sectionId, password) {
-  const res = await fetch(API_URL, {
-    method: 'POST',
-    body: JSON.stringify({ action: 'verify_section_password', section_id: sectionId, password }),
-  });
-  return res.json();
-}
-
-function trackClick(linkId) {
-  fetch(API_URL, {
-    method: 'POST',
-    body: JSON.stringify({ action: 'track_click', link_id: linkId }),
-  }).catch(() => {});
-}
-
-async function apiPost(payload) {
-  const user = getUser();
-  if (user) payload.user_id = user.user_id;
-  const res = await fetch(API_URL, { method: 'POST', body: JSON.stringify(payload) });
-  return res.json();
 }
 
 // ── Theme ─────────────────────────────────────────────────────────────────────
 
-const toggleBtn = document.getElementById('toggle-theme');
+let currentTheme = localStorage.getItem('theme') ||
+  (window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark');
 
-function prefersDark() {
-  return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+function applyTheme() {
+  document.body.classList.toggle('light', currentTheme === 'light');
+  document.getElementById('toggle-theme').textContent = currentTheme === 'light' ? '🌙' : '☀️';
 }
 
-const savedTheme = localStorage.getItem('theme');
-let currentTheme = savedTheme || (prefersDark() ? 'dark' : 'light');
-
-function applyTheme(theme) {
-  if (theme === 'light') {
-    document.body.classList.add('light');
-    toggleBtn.textContent = '☀️';
-  } else {
-    document.body.classList.remove('light');
-    toggleBtn.textContent = '🌙';
-  }
-}
-
-applyTheme(currentTheme);
-
-toggleBtn.addEventListener('click', () => {
-  currentTheme = currentTheme === 'dark' ? 'light' : 'dark';
+document.getElementById('toggle-theme').addEventListener('click', () => {
+  currentTheme = currentTheme === 'light' ? 'dark' : 'light';
   localStorage.setItem('theme', currentTheme);
-  applyTheme(currentTheme);
+  applyTheme();
   const cached = getCachedData();
-  if (cached) renderAll(cached.sections, cached.links);
+  if (cached) renderAll(cached.sections || [], cached.links || []);
 });
 
-// ── Quote ─────────────────────────────────────────────────────────────────────
+// ── Favicon ───────────────────────────────────────────────────────────────────
 
-const quotes = [
+function getFaviconUrl(url) {
+  try { return `https://www.google.com/s2/favicons?domain=${new URL(url).hostname}&sz=32`; }
+  catch { return ''; }
+}
+
+// ── Fallback quotes (used if Sheets returns none) ─────────────────────────────
+
+const FALLBACK_QUOTES = [
   "「妳是什麼座的啊？」\n：「金牛座啊，你呢？」\n「我是為妳量身訂做的。」",
   "「別再哭了，這樣有個地方會痛。」\n：「我的眼睛嗎？」\n「不是，是我的心會痛。」",
   "「我可以跟妳問路嗎？」\n：「你要到哪裡？」\n「到妳心裡。」",
@@ -118,244 +74,291 @@ const quotes = [
   "我不需要征服世界，因為發現妳就是我的全世界。",
 ];
 
-function updateQuote() {
-  document.getElementById('quote-line').innerText = quotes[Math.floor(Math.random() * quotes.length)];
-}
+let activeQuotes = [...FALLBACK_QUOTES];
 
-const today = new Date();
-document.getElementById('quote-date').textContent =
-  today.toLocaleDateString('zh-Hant', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' });
-updateQuote();
+function updateQuote() {
+  const list = activeQuotes.length ? activeQuotes : FALLBACK_QUOTES;
+  const raw = list[Math.floor(Math.random() * list.length)];
+  document.getElementById('quote-line').innerHTML = raw.replace(/\n/g, '<br>');
+  const d = new Date();
+  document.getElementById('quote-date').textContent =
+    `${d.getFullYear()}/${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')}`;
+}
 document.getElementById('quote-button').addEventListener('click', updateQuote);
 
-// ── Search ─────────────────────────────────────────────────────────────────────
+// ── Settings ──────────────────────────────────────────────────────────────────
 
-const searchBox = document.getElementById('search-box');
-searchBox.addEventListener('input', () => {
-  const cached = getCachedData();
-  if (cached) renderAll(cached.sections, cached.links);
-});
+function applySettings(settings) {
+  if (!settings) return;
+  if (settings.page_title) {
+    document.getElementById('page-title').textContent = settings.page_title;
+    document.title = settings.page_title;
+  }
+  const searchBox = document.getElementById('search-box');
+  if (settings.show_search === 'false' || settings.show_search === false) {
+    searchBox.style.display = 'none';
+  } else {
+    searchBox.style.display = '';
+  }
+}
 
-// ── Preview box ────────────────────────────────────────────────────────────────
+function renderHeaderLinks(headerLinks) {
+  const container = document.getElementById('header-links-container');
+  container.innerHTML = '';
+  (headerLinks || []).forEach(item => {
+    if (!item.name || !item.url) return;
+    const a = document.createElement('a');
+    a.href = item.url;
+    a.target = '_blank';
+    a.rel = 'noopener';
+    a.textContent = item.name;
+    container.appendChild(a);
+  });
+}
 
-const previewBox    = document.getElementById('previewBox');
-const previewIframe = previewBox.querySelector('iframe');
+// ── API ───────────────────────────────────────────────────────────────────────
 
-// ── Render ────────────────────────────────────────────────────────────────────
+async function fetchPageData() {
+  const user = getUser();
+  const url = user ? `${API_URL}?user_id=${encodeURIComponent(user.user_id)}` : API_URL;
+  const res = await fetch(url);
+  return res.json();
+}
+
+async function apiPost(payload) {
+  const user = getUser();
+  if (user) payload.user_id = user.user_id;
+  const res = await fetch(API_URL, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+  return res.json();
+}
+
+async function verifyPassword(sectionId, password) {
+  return apiPost({ action: 'verify_section_password', section_id: sectionId, password });
+}
+
+function trackClick(linkId) {
+  apiPost({ action: 'track_click', link_id: linkId }).catch(() => {});
+}
+
+// ── Render helpers ────────────────────────────────────────────────────────────
 
 function makeLinkAnchor(link) {
-  const anchor = document.createElement('a');
-  anchor.href = link.url;
-  anchor.target = '_blank';
-  anchor.rel = 'noopener';
-  anchor.className = 'link-item';
-  anchor.dataset.linkId = link.link_id;
+  const a = document.createElement('a');
+  a.className = 'link-item';
+  a.href = link.url;
+  a.target = '_blank';
+  a.rel = 'noopener';
 
-  const faviconSrc = link.favicon_url || getFaviconUrl(link.url);
-  if (faviconSrc) {
-    const img = document.createElement('img');
-    img.src = faviconSrc;
-    img.className = 'favicon';
-    img.onerror = () => img.remove();
-    anchor.appendChild(img);
-  }
+  const favicon = document.createElement('img');
+  favicon.className = 'favicon';
+  favicon.src = link.favicon_url || getFaviconUrl(link.url);
+  favicon.alt = '';
+  favicon.onerror = () => { favicon.style.display = 'none'; };
 
-  const span = document.createElement('span');
-  span.textContent = link.name;
-  anchor.appendChild(span);
+  const nameEl = document.createElement('span');
+  nameEl.textContent = link.name;
 
-  anchor.addEventListener('click', () => trackClick(link.link_id));
+  a.appendChild(favicon);
+  a.appendChild(nameEl);
 
-  anchor.addEventListener('mouseenter', e => {
-    previewIframe.src = link.url;
-    previewBox.style.left = e.pageX + 20 + 'px';
-    previewBox.style.top  = e.pageY + 20 + 'px';
+  a.addEventListener('click', () => trackClick(link.link_id));
+
+  const previewBox = document.getElementById('previewBox');
+  a.addEventListener('mouseenter', () => {
+    previewBox.querySelector('iframe').src = link.url;
     previewBox.style.display = 'block';
   });
-  anchor.addEventListener('mousemove', e => {
-    previewBox.style.left = e.pageX + 20 + 'px';
-    previewBox.style.top  = e.pageY + 20 + 'px';
-  });
-  anchor.addEventListener('mouseleave', () => {
+  a.addEventListener('mouseleave', () => {
     previewBox.style.display = 'none';
-    previewIframe.src = '';
+    previewBox.querySelector('iframe').src = '';
   });
 
-  return anchor;
+  return a;
 }
 
 function renderPinned(links) {
   const pinned = links.filter(l => l.pinned);
-  const el = document.getElementById('pinned-section');
-  if (pinned.length === 0) { el.style.display = 'none'; return; }
-  el.style.display = '';
-  const grid = el.querySelector('.link-grid');
+  const container = document.getElementById('pinned-section');
+  if (pinned.length === 0) { container.style.display = 'none'; return; }
+  container.style.display = '';
+  const grid = container.querySelector('.link-grid');
   grid.innerHTML = '';
   pinned.forEach(l => grid.appendChild(makeLinkAnchor(l)));
 }
 
-function renderLockedOverlay(section, container) {
-  const overlay = document.createElement('div');
-  overlay.className = 'locked-overlay';
-
-  const msg = document.createElement('p');
-  const isPasswordOrUsers = section.visibility === 'passwordOrUsers';
-  msg.textContent = isPasswordOrUsers ? '此區塊需要密碼或登入帳號才能查看' : '此區塊需要密碼才能查看';
-  overlay.appendChild(msg);
-
-  const actionsDiv = document.createElement('div');
-  actionsDiv.className = 'locked-actions';
-
-  const pwBtn = document.createElement('button');
-  pwBtn.className = 'unlock-btn';
-  pwBtn.textContent = '🔑 輸入密碼';
-  actionsDiv.appendChild(pwBtn);
-
-  if (isPasswordOrUsers && !getUser()) {
-    const loginBtn = document.createElement('button');
-    loginBtn.className = 'unlock-btn';
-    loginBtn.textContent = '👤 登入帳號';
-    loginBtn.addEventListener('click', () => openLoginModal());
-    actionsDiv.appendChild(loginBtn);
-  }
-
-  overlay.appendChild(actionsDiv);
-
-  const pwRow = document.createElement('div');
-  pwRow.className = 'password-input-row';
-  pwRow.style.display = 'none';
-
-  const pwInput = document.createElement('input');
-  pwInput.type = 'password';
-  pwInput.placeholder = '輸入密碼';
-  pwRow.appendChild(pwInput);
-
-  const pwSubmit = document.createElement('button');
-  pwSubmit.className = 'unlock-btn';
-  pwSubmit.textContent = '確認';
-  pwRow.appendChild(pwSubmit);
-
-  const errMsg = document.createElement('div');
-  errMsg.className = 'password-error';
-
-  overlay.appendChild(pwRow);
-  overlay.appendChild(errMsg);
-  container.appendChild(overlay);
-
-  pwBtn.addEventListener('click', () => {
-    pwRow.style.display = pwRow.style.display === 'none' ? 'flex' : 'none';
-    pwInput.focus();
-  });
-
-  async function tryUnlock() {
-    const pw = pwInput.value;
-    if (!pw) return;
-    pwSubmit.disabled = true;
-    errMsg.textContent = '驗證中...';
-    const result = await verifyPassword(section.section_id, pw);
-    pwSubmit.disabled = false;
-    if (result.success) {
-      unlockedSections.set(section.section_id, result.links);
-      persistUnlocked();
-      container.innerHTML = '';
-      renderLinkGrid(result.links, container, section);
-    } else {
-      errMsg.textContent = result.message || '密碼錯誤';
-    }
-  }
-
-  pwSubmit.addEventListener('click', tryUnlock);
-  pwInput.addEventListener('keydown', e => { if (e.key === 'Enter') tryUnlock(); });
-}
-
 function renderLinkGrid(links, container, section) {
-  const query = searchBox.value.toLowerCase();
-  const filtered = query ? links.filter(l => l.name.toLowerCase().includes(query)) : links;
-
   const grid = document.createElement('div');
   grid.className = 'link-grid';
+
+  const q = (document.getElementById('search-box').value || '').toLowerCase();
+  const filtered = q
+    ? links.filter(l => l.name.toLowerCase().includes(q) || l.url.toLowerCase().includes(q))
+    : links;
+
   filtered.forEach(l => grid.appendChild(makeLinkAnchor(l)));
   container.appendChild(grid);
 
   if (getUser()?.role === 'admin') {
-    const qaBtn = document.createElement('button');
-    qaBtn.className = 'quick-add-btn';
-    qaBtn.textContent = '+ 新增連結';
-    qaBtn.addEventListener('click', () => showQuickAdd(section.section_id, container.parentElement, links));
-    container.appendChild(qaBtn);
+    const btn = document.createElement('button');
+    btn.className = 'quick-add-btn';
+    btn.textContent = '＋ 新增連結';
+    btn.addEventListener('click', () => showQuickAdd(section.section_id, container));
+    container.appendChild(btn);
   }
 }
 
+// ── Section type renderers ────────────────────────────────────────────────────
+
+function renderNote(section, container) {
+  const div = document.createElement('div');
+  div.className = 'section-content-note';
+  div.innerHTML = (section.note || '').replace(/\n/g, '<br>');
+  container.appendChild(div);
+}
+
+function renderEmbed(section, container) {
+  const wrap = document.createElement('div');
+  wrap.className = 'section-embed';
+  const iframe = document.createElement('iframe');
+  iframe.src = section.note || '';
+  iframe.allowFullscreen = true;
+  wrap.appendChild(iframe);
+  container.appendChild(wrap);
+}
+
+function renderAnnouncement(section, container) {
+  const div = document.createElement('div');
+  div.className = 'section-announcement';
+  div.innerHTML = (section.note || '').replace(/\n/g, '<br>');
+  container.appendChild(div);
+}
+
+function renderSectionBody(section, links, container) {
+  const type = section.type || 'links';
+  if (type === 'note')         { renderNote(section, container); return; }
+  if (type === 'embed')        { renderEmbed(section, container); return; }
+  if (type === 'announcement') { renderAnnouncement(section, container); return; }
+  renderLinkGrid(links, container, section);
+}
+
+// ── Locked overlay ────────────────────────────────────────────────────────────
+
+function renderLockedOverlay(section, container, onUnlock) {
+  const overlay = document.createElement('div');
+  overlay.className = 'locked-overlay';
+
+  const msg = document.createElement('div');
+  msg.className = 'locked-msg';
+  msg.textContent = '🔒 此區塊需要解鎖';
+  overlay.appendChild(msg);
+
+  const actions = document.createElement('div');
+  actions.className = 'locked-actions';
+
+  if (section.visibility === 'passwordOrUsers' || section.visibility === 'password') {
+    const row = document.createElement('div');
+    row.className = 'password-input-row';
+    const inp = document.createElement('input');
+    inp.type = 'password';
+    inp.placeholder = '輸入密碼';
+    inp.className = 'section-password-input';
+    const btn = document.createElement('button');
+    btn.className = 'unlock-btn';
+    btn.textContent = '解鎖';
+    const err = document.createElement('div');
+    err.className = 'password-error';
+
+    btn.addEventListener('click', async () => {
+      btn.disabled = true;
+      const result = await verifyPassword(section.section_id, inp.value);
+      btn.disabled = false;
+      if (result.success) {
+        unlockedSections.set(section.section_id, result.links);
+        saveUnlocked();
+        overlay.remove();
+        onUnlock(result.links);
+      } else {
+        err.textContent = result.message || '密碼錯誤';
+      }
+    });
+
+    inp.addEventListener('keydown', e => { if (e.key === 'Enter') btn.click(); });
+
+    row.appendChild(inp);
+    row.appendChild(btn);
+    actions.appendChild(row);
+    actions.appendChild(err);
+  }
+
+  if (section.visibility === 'users' || section.visibility === 'passwordOrUsers') {
+    const hint = document.createElement('div');
+    hint.className = 'locked-login-hint';
+    hint.textContent = '或登入帳號查看';
+    actions.appendChild(hint);
+  }
+
+  overlay.appendChild(actions);
+  container.appendChild(overlay);
+}
+
+// ── Main render ───────────────────────────────────────────────────────────────
+
+const categoryOrder = [];
+
 function renderAll(sections, links) {
-  const query = searchBox.value.toLowerCase();
+  const q = (document.getElementById('search-box').value || '').toLowerCase();
   const container = document.getElementById('linkSections');
   container.innerHTML = '';
 
-  const filteredLinks = query
-    ? links.filter(l => l.name.toLowerCase().includes(query))
-    : links;
+  renderPinned(links);
 
-  renderPinned(filteredLinks);
+  const orderedIds = categoryOrder.length
+    ? [...categoryOrder, ...sections.map(s => s.section_id).filter(id => !categoryOrder.includes(id))]
+    : sections.map(s => s.section_id);
 
-  sections.forEach(section => {
-    const sectionLinks = filteredLinks.filter(l => l.section_id === section.section_id);
-    if (query && sectionLinks.length === 0 && section.locked) return;
+  orderedIds.forEach(sid => {
+    const section = sections.find(s => s.section_id === sid);
+    if (!section) return;
 
-    const bgColor = currentTheme === 'dark' ? section.dark_color : section.light_color;
+    const sectionLinks = links.filter(l => l.section_id === sid);
 
-    const el = document.createElement('div');
-    el.className = 'section';
-    el.style.backgroundColor = bgColor;
+    if (q && section.type === 'links') {
+      const hasMatch = sectionLinks.some(l =>
+        l.name.toLowerCase().includes(q) || l.url.toLowerCase().includes(q)
+      );
+      if (!hasMatch) return;
+    }
+
+    const card = document.createElement('div');
+    card.className = 'section-card';
+    const isDark = currentTheme !== 'light';
+    card.style.setProperty('--section-bg', isDark ? section.dark_color : section.light_color);
+    card.style.setProperty('--section-text', section.text_color);
+    card.dataset.sectionId = sid;
 
     const h2 = document.createElement('h2');
-    h2.style.color = section.text_color;
-
-    const titleLeft = document.createElement('div');
-    titleLeft.className = 'section-title-left';
-    if (section.locked) {
-      const lock = document.createElement('span');
-      lock.className = 'lock-icon';
-      lock.textContent = '🔒';
-      titleLeft.appendChild(lock);
-    }
-    const nameSpan = document.createElement('span');
-    nameSpan.textContent = section.name;
-    titleLeft.appendChild(nameSpan);
-    h2.appendChild(titleLeft);
-
-    const toggleBtn = document.createElement('button');
-    toggleBtn.className = 'toggle-btn';
-    toggleBtn.textContent = '⮟';
-    h2.appendChild(toggleBtn);
-    el.appendChild(h2);
-
-    if (section.note) {
-      const note = document.createElement('div');
-      note.className = 'section-note';
-      note.textContent = section.note;
-      el.appendChild(note);
-    }
+    h2.textContent = section.name;
+    card.appendChild(h2);
 
     const body = document.createElement('div');
-    el.appendChild(body);
+    body.className = 'section-body';
 
-    if (section.locked && !unlockedSections.has(section.section_id)) {
-      renderLockedOverlay(section, body);
+    if (section.locked && !unlockedSections.has(sid)) {
+      renderLockedOverlay(section, body, unlockedLinks => {
+        renderSectionBody(section, unlockedLinks, body);
+      });
     } else {
-      const linksToShow = unlockedSections.has(section.section_id)
-        ? unlockedSections.get(section.section_id)
+      const resolvedLinks = unlockedSections.has(sid)
+        ? unlockedSections.get(sid)
         : sectionLinks;
-      renderLinkGrid(linksToShow, body, section);
+      renderSectionBody(section, resolvedLinks, body);
     }
 
-    toggleBtn.addEventListener('click', e => {
-      e.stopPropagation();
-      const hidden = body.style.display === 'none';
-      body.style.display = hidden ? '' : 'none';
-      toggleBtn.textContent = hidden ? '⮟' : '⮝';
-    });
-
-    container.appendChild(el);
+    card.appendChild(body);
+    container.appendChild(card);
   });
 }
 
@@ -365,15 +368,9 @@ function showSkeleton() {
   const container = document.getElementById('linkSections');
   container.innerHTML = '';
   for (let i = 0; i < 3; i++) {
-    container.innerHTML += `
-      <div class="skeleton-section">
-        <div class="skeleton-title"></div>
-        <div class="skeleton-grid">
-          <div class="skeleton-card"></div>
-          <div class="skeleton-card"></div>
-          <div class="skeleton-card"></div>
-        </div>
-      </div>`;
+    const div = document.createElement('div');
+    div.className = 'skeleton-section';
+    container.appendChild(div);
   }
 }
 
@@ -382,158 +379,137 @@ function showSkeleton() {
 function updateAuthUI(user) {
   const loginBtn  = document.getElementById('login-btn');
   const userInfo  = document.getElementById('user-info');
-  const adminBtn  = document.getElementById('admin-btn');
   const userLabel = document.getElementById('user-label');
+  const adminBtn  = document.getElementById('admin-btn');
 
   if (user) {
-    loginBtn.classList.add('hidden');
-    userInfo.classList.add('visible');
-    userLabel.textContent = user.username;
-    if (user.role === 'admin') adminBtn.classList.add('visible');
-    else adminBtn.classList.remove('visible');
+    loginBtn.style.display  = 'none';
+    userInfo.style.display  = 'flex';
+    userLabel.textContent   = user.username;
+    adminBtn.style.display  = user.role === 'admin' ? '' : 'none';
   } else {
-    loginBtn.classList.remove('hidden');
-    userInfo.classList.remove('visible');
-    adminBtn.classList.remove('visible');
+    loginBtn.style.display  = '';
+    userInfo.style.display  = 'none';
+    adminBtn.style.display  = 'none';
   }
 }
 
-// ── Login modal ───────────────────────────────────────────────────────────────
-
 function openLoginModal() {
   document.getElementById('login-modal').classList.remove('hidden');
-  document.getElementById('modal-userid').focus();
-}
-
-function closeLoginModal() {
-  document.getElementById('login-modal').classList.add('hidden');
-  document.getElementById('modal-userid').value = '';
-  document.getElementById('modal-password').value = '';
+  document.getElementById('modal-userid').value    = '';
+  document.getElementById('modal-password').value  = '';
   document.getElementById('modal-msg').textContent = '';
 }
-
-function initLoginModal() {
-  document.getElementById('login-btn').addEventListener('click', openLoginModal);
-  document.getElementById('modal-close').addEventListener('click', closeLoginModal);
-  document.getElementById('login-modal').addEventListener('click', e => {
-    if (e.target === document.getElementById('login-modal')) closeLoginModal();
-  });
-
-  document.getElementById('logout-btn').addEventListener('click', () => {
-    clearSession();
-    updateAuthUI(null);
-    sessionStorage.removeItem('yk_unlocked');
-    unlockedSections.clear();
-    init();
-  });
-
-  document.getElementById('modal-submit').addEventListener('click', handleLogin);
-  document.getElementById('modal-password').addEventListener('keydown', e => {
-    if (e.key === 'Enter') handleLogin();
-  });
+function closeLoginModal() {
+  document.getElementById('login-modal').classList.add('hidden');
 }
 
 async function handleLogin() {
   const userId   = document.getElementById('modal-userid').value.trim();
   const password = document.getElementById('modal-password').value;
-  const msgEl    = document.getElementById('modal-msg');
-  const btn      = document.getElementById('modal-submit');
+  const msg      = document.getElementById('modal-msg');
+  if (!userId || !password) { msg.textContent = '請填入帳號和密碼'; return; }
 
-  if (!userId || !password) { msgEl.textContent = '請輸入帳號與密碼'; msgEl.style.color = 'var(--danger)'; return; }
-
-  msgEl.style.color = 'var(--text-color)';
-  msgEl.textContent = '驗證中...';
+  const btn = document.getElementById('modal-submit');
   btn.disabled = true;
+  const result = await apiPost({ action: 'login', user_id: userId, password }).catch(() => ({ success: false }));
+  btn.disabled = false;
 
-  try {
-    const res = await fetch(API_URL, {
-      method: 'POST',
-      body: JSON.stringify({ action: 'login', user_id: userId, password }),
-    });
-    const data = await res.json();
-
-    if (data.success) {
-      setSession(data.user, data.token);
-      closeLoginModal();
-      updateAuthUI(data.user);
-      await init();
-    } else {
-      msgEl.style.color = 'var(--danger)';
-      msgEl.textContent = data.message || '登入失敗';
-    }
-  } catch {
-    msgEl.style.color = 'var(--danger)';
-    msgEl.textContent = '連線失敗，請檢查網路狀態';
-  } finally {
-    btn.disabled = false;
+  if (result.success) {
+    setSession(result.user, result.token);
+    closeLoginModal();
+    updateAuthUI(result.user);
+    location.reload();
+  } else {
+    msg.textContent = result.message || '登入失敗';
   }
 }
 
-// ── Quick-add ─────────────────────────────────────────────────────────────────
+document.getElementById('login-btn').addEventListener('click', openLoginModal);
+document.getElementById('modal-close').addEventListener('click', closeLoginModal);
+document.getElementById('modal-submit').addEventListener('click', handleLogin);
+document.getElementById('logout-btn').addEventListener('click', () => {
+  clearSession();
+  updateAuthUI(null);
+  location.reload();
+});
+document.getElementById('login-modal').addEventListener('click', e => {
+  if (e.target === document.getElementById('login-modal')) closeLoginModal();
+});
+document.getElementById('modal-password').addEventListener('keydown', e => {
+  if (e.key === 'Enter') handleLogin();
+});
 
-function showQuickAdd(sectionId, sectionEl, existingLinks) {
+// ── Quick-add popover ─────────────────────────────────────────────────────────
+
+function showQuickAdd(sectionId, sectionEl) {
   const existing = sectionEl.querySelector('.quick-add-popover');
   if (existing) { existing.remove(); return; }
 
-  const popover = document.createElement('div');
-  popover.className = 'quick-add-popover';
-  popover.innerHTML = `
-    <input id="qa-name" placeholder="連結名稱" />
-    <input id="qa-url"  placeholder="https://..." />
-    <div class="popover-actions">
-      <button class="popover-cancel">取消</button>
-      <button class="popover-submit">新增</button>
-    </div>
-    <div id="qa-msg" style="font-size:0.8rem; margin-top:0.4rem; text-align:right;"></div>
+  const pop = document.createElement('div');
+  pop.className = 'quick-add-popover';
+  pop.innerHTML = `
+    <input type="text" id="qa-name" placeholder="名稱">
+    <input type="url"  id="qa-url"  placeholder="網址">
+    <button id="qa-submit">新增</button>
+    <button id="qa-cancel">取消</button>
   `;
-  sectionEl.appendChild(popover);
-  popover.querySelector('#qa-name').focus();
+  sectionEl.appendChild(pop);
 
-  popover.querySelector('.popover-cancel').addEventListener('click', () => popover.remove());
+  pop.querySelector('#qa-cancel').addEventListener('click', () => pop.remove());
+  pop.querySelector('#qa-submit').addEventListener('click', async () => {
+    const name = pop.querySelector('#qa-name').value.trim();
+    const url  = pop.querySelector('#qa-url').value.trim();
+    if (!name || !url) return;
 
-  async function submit() {
-    const name = popover.querySelector('#qa-name').value.trim();
-    const url  = popover.querySelector('#qa-url').value.trim();
-    const msg  = popover.querySelector('#qa-msg');
-    if (!name || !url) { msg.textContent = '請填寫名稱與網址'; return; }
-
-    msg.textContent = '新增中...';
     const result = await apiPost({ action: 'add_link', section_id: sectionId, name, url });
     if (result.success) {
-      popover.remove();
-      await init();
-    } else {
-      msg.textContent = result.message || '新增失敗';
+      pop.remove();
+      init();
     }
-  }
-
-  popover.querySelector('.popover-submit').addEventListener('click', submit);
-  popover.querySelector('#qa-url').addEventListener('keydown', e => { if (e.key === 'Enter') submit(); });
+  });
 }
+
+// ── Search ────────────────────────────────────────────────────────────────────
+
+document.getElementById('search-box').addEventListener('input', () => {
+  const cached = getCachedData();
+  if (cached) renderAll(cached.sections || [], cached.links || []);
+});
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 
 async function init() {
+  applyTheme();
+  updateAuthUI(getUser());
+  updateQuote();
+
   const cached = getCachedData();
   if (cached) {
-    renderAll(cached.sections, cached.links);
+    applySettings(cached.settings);
+    renderHeaderLinks(cached.settings?.header_links);
+    if (cached.quotes?.length) activeQuotes = cached.quotes.map(q => q.text);
+    renderAll(cached.sections || [], cached.links || []);
   } else {
     showSkeleton();
   }
-  updateAuthUI(getUser());
 
   try {
     const data = await fetchPageData();
-    setCachedData({ sections: data.sections, links: data.links });
-    renderAll(data.sections, data.links);
-    if (data.current_user) updateAuthUI(data.current_user);
-  } catch (err) {
-    if (!cached) {
-      document.getElementById('linkSections').innerHTML =
-        `<p style="text-align:center;opacity:0.6;">⚠️ 無法載入資料（${err.message}）</p>`;
+    if (data.success) {
+      setCachedData(data);
+      applySettings(data.settings);
+      renderHeaderLinks(data.settings?.header_links);
+      if (data.quotes?.length) {
+        activeQuotes = data.quotes.map(q => q.text);
+        updateQuote();
+      }
+      renderAll(data.sections || [], data.links || []);
+      updateAuthUI(data.current_user || getUser());
     }
+  } catch(err) {
+    console.warn('資料載入失敗，使用快取', err);
   }
 }
 
-initLoginModal();
 init();

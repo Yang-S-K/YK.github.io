@@ -1,19 +1,22 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// Sheets 結構（請手動建立以下工作表與欄位）
+// Sheets 結構
 //
 // Sections: section_id | name | order | dark_color | light_color | text_color |
-//           visibility | password | allowed_users | is_visible | note
+//           visibility | password | allowed_users | is_visible | note | type
 //
 // Links:    link_id | section_id | name | url | order | is_visible |
 //           pinned | clicks | last_clicked | favicon_url
 //
 // Users:    user_id | username | password | role
 //
-// visibility 可選值: public | password | users | passwordOrUsers
-// role 可選值: admin | user
+// Settings: key | value
+//
+// Quotes:   quote_id | text | order | is_active
+//
+// visibility: public | password | users | passwordOrUsers
+// type:       links | note | embed | announcement
+// role:       admin | user
 // ─────────────────────────────────────────────────────────────────────────────
-
-// ── Helpers ──────────────────────────────────────────────────────────────────
 
 function jsonResponse(data) {
   return ContentService.createTextOutput(JSON.stringify(data))
@@ -64,7 +67,7 @@ function updateRow(sheet, idColName, idValue, updates) {
   return false;
 }
 
-// ── doGet：讀取頁面資料 ────────────────────────────────────────────────────────
+// ── doGet ─────────────────────────────────────────────────────────────────────
 
 function doGet(e) {
   try {
@@ -79,7 +82,6 @@ function doGet(e) {
       .filter(l => isTrue(l.is_visible))
       .sort((a, b) => Number(a.order) - Number(b.order));
 
-    // 找出目前用戶
     let userObj = null;
     if (userId) {
       const users = sheetToObjects(ss.getSheetByName('Users'));
@@ -87,92 +89,119 @@ function doGet(e) {
     }
     const userIsAdmin = userObj && userObj.role === 'admin';
 
-    // 過濾 section，決定是否顯示、是否鎖定
+    // ── Sections（含 visibility 過濾 + lock 判斷）──
     const sections = [];
     allSections.forEach(s => {
       const v = s.visibility;
       const allowedList = String(s.allowed_users || '').split(',').map(x => x.trim()).filter(Boolean);
       const userAllowed = userObj && (userIsAdmin || allowedList.includes(userId));
 
-      let include = false;
-      let locked = false;
+      let include = false, locked = false;
 
-      if (v === 'public') {
-        include = true;
-      } else if (v === 'password') {
-        include = true;
-        locked = true;
-      } else if (v === 'users') {
-        include = userAllowed;
-        locked = false;
-      } else if (v === 'passwordOrUsers') {
-        include = true;
-        locked = !userAllowed; // 有帳號權限的不用密碼，否則顯示但鎖定
-      }
+      if (v === 'public')            { include = true; }
+      else if (v === 'password')     { include = true; locked = true; }
+      else if (v === 'users')        { include = userAllowed; }
+      else if (v === 'passwordOrUsers') { include = true; locked = !userAllowed; }
 
       if (include) {
         sections.push({
-          section_id: s.section_id,
-          name: s.name,
-          order: Number(s.order),
-          dark_color: s.dark_color,
-          light_color: s.light_color,
-          text_color: s.text_color,
-          visibility: v,
+          section_id:    s.section_id,
+          name:          s.name,
+          order:         Number(s.order),
+          dark_color:    s.dark_color,
+          light_color:   s.light_color,
+          text_color:    s.text_color,
+          visibility:    v,
           allowed_users: String(s.allowed_users || ''),
-          note: s.note || '',
-          locked: locked,
+          note:          s.note || '',
+          type:          s.type || 'links',
+          locked:        locked,
         });
       }
     });
 
-    // 鎖定的 section 不回傳連結（必須解鎖後才拿）
-    const lockedIds = new Set(sections.filter(s => s.locked).map(s => s.section_id));
+    const lockedIds  = new Set(sections.filter(s => s.locked).map(s => s.section_id));
     const visibleIds = new Set(sections.map(s => s.section_id));
 
     const links = allLinks
       .filter(l => visibleIds.has(l.section_id) && !lockedIds.has(l.section_id))
       .map(l => ({
-        link_id: l.link_id,
-        section_id: l.section_id,
-        name: l.name,
-        url: l.url,
-        order: Number(l.order),
-        pinned: isTrue(l.pinned),
-        clicks: Number(l.clicks) || 0,
+        link_id:     l.link_id,
+        section_id:  l.section_id,
+        name:        l.name,
+        url:         l.url,
+        order:       Number(l.order),
+        pinned:      isTrue(l.pinned),
+        clicks:      Number(l.clicks) || 0,
         last_clicked: l.last_clicked ? String(l.last_clicked) : '',
         favicon_url: l.favicon_url || '',
       }));
 
-    const currentUser = userObj ? {
-      user_id: userObj.user_id,
-      username: userObj.username,
-      role: userObj.role,
-    } : null;
+    const currentUser = userObj
+      ? { user_id: userObj.user_id, username: userObj.username, role: userObj.role }
+      : null;
 
-    // Admin 另外拿全部 users 清單
     let allUsers = null;
     if (userIsAdmin) {
-      allUsers = sheetToObjects(ss.getSheetByName('Users')).map(u => ({
-        user_id: u.user_id, username: u.username, role: u.role,
-      }));
+      allUsers = sheetToObjects(ss.getSheetByName('Users'))
+        .map(u => ({ user_id: u.user_id, username: u.username, role: u.role }));
     }
 
-    return jsonResponse({ success: true, sections, links, current_user: currentUser, all_users: allUsers });
+    // ── Settings ──
+    const settingsObj = {};
+    const settingsSheet = ss.getSheetByName('Settings');
+    if (settingsSheet) {
+      sheetToObjects(settingsSheet).forEach(row => { settingsObj[row.key] = row.value; });
+    }
+    try { settingsObj.header_links = JSON.parse(settingsObj.header_links || '[]'); }
+    catch { settingsObj.header_links = []; }
+
+    let allSettings = null;
+    if (userIsAdmin && settingsSheet) {
+      allSettings = sheetToObjects(settingsSheet);
+    }
+
+    // ── Quotes ──
+    const quotesSheet = ss.getSheetByName('Quotes');
+    const quotes = quotesSheet
+      ? sheetToObjects(quotesSheet)
+          .filter(q => isTrue(q.is_active))
+          .sort((a, b) => Number(a.order) - Number(b.order))
+          .map(q => ({ quote_id: q.quote_id, text: String(q.text) }))
+      : [];
+
+    let allQuotes = null;
+    if (userIsAdmin && quotesSheet) {
+      allQuotes = sheetToObjects(quotesSheet)
+        .sort((a, b) => Number(a.order) - Number(b.order))
+        .map(q => ({
+          quote_id:  q.quote_id,
+          text:      String(q.text),
+          order:     Number(q.order),
+          is_active: isTrue(q.is_active),
+        }));
+    }
+
+    return jsonResponse({
+      success: true, sections, links,
+      current_user: currentUser, all_users: allUsers,
+      settings: settingsObj, quotes,
+      all_quotes: allQuotes, all_settings: allSettings,
+    });
 
   } catch(err) {
     return jsonResponse({ success: false, message: '後端錯誤: ' + err.toString() });
   }
 }
 
-// ── doPost：所有寫入操作 ───────────────────────────────────────────────────────
+// ── doPost ────────────────────────────────────────────────────────────────────
 
 function doPost(e) {
   try {
     const params = JSON.parse(e.postData.contents);
     const ss = SpreadsheetApp.getActiveSpreadsheet();
 
-    // ── 登入 ─────────────────────────────────────────────────────────────────
+    // ── 登入 ──
     if (params.action === 'login') {
       const users = sheetToObjects(ss.getSheetByName('Users'));
       const user = users.find(u =>
@@ -189,14 +218,14 @@ function doPost(e) {
       return jsonResponse({ success: false, message: '帳號或密碼錯誤' });
     }
 
-    // ── 驗證 Section 密碼（解鎖後回傳該 section 的連結）────────────────────────
+    // ── 驗證 Section 密碼 ──
     if (params.action === 'verify_section_password') {
       const sections = sheetToObjects(ss.getSheetByName('Sections'));
       const section = sections.find(s => String(s.section_id) === String(params.section_id));
       if (!section) return jsonResponse({ success: false, message: '找不到此區塊' });
-      if (String(section.password) !== String(params.password)) {
+      if (String(section.password) !== String(params.password))
         return jsonResponse({ success: false, message: '密碼錯誤' });
-      }
+
       const links = sheetToObjects(ss.getSheetByName('Links'))
         .filter(l => String(l.section_id) === String(params.section_id) && isTrue(l.is_visible))
         .sort((a, b) => Number(a.order) - Number(b.order))
@@ -208,7 +237,7 @@ function doPost(e) {
       return jsonResponse({ success: true, links });
     }
 
-    // ── 記錄點擊 ──────────────────────────────────────────────────────────────
+    // ── 記錄點擊 ──
     if (params.action === 'track_click') {
       const sheet = ss.getSheetByName('Links');
       const data = sheet.getDataRange().getValues();
@@ -226,12 +255,12 @@ function doPost(e) {
       return jsonResponse({ success: false, message: '找不到連結' });
     }
 
-    // ── 以下皆需 Admin 權限 ────────────────────────────────────────────────────
+    // ── Admin 驗證 ──
     if (!isAdmin(ss, params.user_id)) {
       return jsonResponse({ success: false, message: '權限不足' });
     }
 
-    // ── Section CRUD ──────────────────────────────────────────────────────────
+    // ── Section CRUD ──
 
     if (params.action === 'add_section') {
       const sheet = ss.getSheetByName('Sections');
@@ -244,7 +273,7 @@ function doPost(e) {
         newId, params.name, maxOrder + 1,
         params.dark_color || '#1e1e1e', params.light_color || '#f4f4f9', params.text_color || '#90caf9',
         params.visibility || 'public', params.password || '',
-        params.allowed_users || '', true, params.note || '',
+        params.allowed_users || '', true, params.note || '', params.type || 'links',
       ]);
       return jsonResponse({ success: true, section_id: newId });
     }
@@ -255,7 +284,7 @@ function doPost(e) {
         name: params.name, dark_color: params.dark_color, light_color: params.light_color,
         text_color: params.text_color, visibility: params.visibility,
         password: params.password, allowed_users: params.allowed_users,
-        is_visible: params.is_visible, note: params.note,
+        is_visible: params.is_visible, note: params.note, type: params.type,
       });
       return jsonResponse({ success: ok, message: ok ? undefined : '找不到區塊' });
     }
@@ -267,7 +296,6 @@ function doPost(e) {
       for (let i = data.length - 1; i >= 1; i--) {
         if (String(data[i][idCol]) === String(params.section_id)) {
           sheet.deleteRow(i + 1);
-          // 一併刪除該 section 的連結
           const linksSheet = ss.getSheetByName('Links');
           const ld = linksSheet.getDataRange().getValues();
           const lsc = ld[0].indexOf('section_id');
@@ -286,18 +314,17 @@ function doPost(e) {
       const headers = data[0];
       const idCol = headers.indexOf('section_id');
       const orderCol = headers.indexOf('order');
-      params.order.forEach((sectionId, idx) => {
+      params.order.forEach((sid, idx) => {
         for (let i = 1; i < data.length; i++) {
-          if (String(data[i][idCol]) === String(sectionId)) {
-            sheet.getRange(i + 1, orderCol + 1).setValue(idx + 1);
-            break;
+          if (String(data[i][idCol]) === String(sid)) {
+            sheet.getRange(i + 1, orderCol + 1).setValue(idx + 1); break;
           }
         }
       });
       return jsonResponse({ success: true });
     }
 
-    // ── Link CRUD ─────────────────────────────────────────────────────────────
+    // ── Link CRUD ──
 
     if (params.action === 'add_link') {
       const sheet = ss.getSheetByName('Links');
@@ -337,25 +364,23 @@ function doPost(e) {
       const headers = data[0];
       const idCol = headers.indexOf('link_id');
       const orderCol = headers.indexOf('order');
-      params.order.forEach((linkId, idx) => {
+      params.order.forEach((lid, idx) => {
         for (let i = 1; i < data.length; i++) {
-          if (String(data[i][idCol]) === String(linkId)) {
-            sheet.getRange(i + 1, orderCol + 1).setValue(idx + 1);
-            break;
+          if (String(data[i][idCol]) === String(lid)) {
+            sheet.getRange(i + 1, orderCol + 1).setValue(idx + 1); break;
           }
         }
       });
       return jsonResponse({ success: true });
     }
 
-    // ── User 管理 ─────────────────────────────────────────────────────────────
+    // ── User 管理 ──
 
     if (params.action === 'add_user') {
       const sheet = ss.getSheetByName('Users');
       const data = sheet.getDataRange().getValues();
-      if (data.slice(1).some(r => String(r[0]) === String(params.user_id))) {
+      if (data.slice(1).some(r => String(r[0]) === String(params.user_id)))
         return jsonResponse({ success: false, message: '帳號 ID 已存在' });
-      }
       sheet.appendRow([params.user_id, params.username, params.password, params.role || 'user']);
       return jsonResponse({ success: true });
     }
@@ -381,7 +406,75 @@ function doPost(e) {
       return jsonResponse({ success: false, message: '找不到使用者' });
     }
 
-    // ── 連結有效性檢查 ─────────────────────────────────────────────────────────
+    // ── Settings ──
+
+    if (params.action === 'update_setting') {
+      const sheet = ss.getSheetByName('Settings');
+      const data = sheet.getDataRange().getValues();
+      const headers = data[0];
+      const keyCol = headers.indexOf('key');
+      const valCol = headers.indexOf('value');
+      for (let i = 1; i < data.length; i++) {
+        if (String(data[i][keyCol]) === String(params.key)) {
+          sheet.getRange(i + 1, valCol + 1).setValue(params.value);
+          return jsonResponse({ success: true });
+        }
+      }
+      sheet.appendRow([params.key, params.value]);
+      return jsonResponse({ success: true });
+    }
+
+    // ── Quotes CRUD ──
+
+    if (params.action === 'add_quote') {
+      const sheet = ss.getSheetByName('Quotes');
+      const rows = sheet.getLastRow();
+      const maxOrder = rows > 1
+        ? Math.max(...sheet.getRange(2, 3, rows - 1, 1).getValues().map(r => Number(r[0]) || 0))
+        : 0;
+      const newId = generateId('q');
+      sheet.appendRow([newId, params.text, maxOrder + 1, true]);
+      return jsonResponse({ success: true, quote_id: newId });
+    }
+
+    if (params.action === 'update_quote') {
+      const sheet = ss.getSheetByName('Quotes');
+      const ok = updateRow(sheet, 'quote_id', params.quote_id, {
+        text: params.text, is_active: params.is_active,
+      });
+      return jsonResponse({ success: ok, message: ok ? undefined : '找不到語錄' });
+    }
+
+    if (params.action === 'delete_quote') {
+      const sheet = ss.getSheetByName('Quotes');
+      const data = sheet.getDataRange().getValues();
+      const idCol = data[0].indexOf('quote_id');
+      for (let i = data.length - 1; i >= 1; i--) {
+        if (String(data[i][idCol]) === String(params.quote_id)) {
+          sheet.deleteRow(i + 1);
+          return jsonResponse({ success: true });
+        }
+      }
+      return jsonResponse({ success: false, message: '找不到語錄' });
+    }
+
+    if (params.action === 'reorder_quotes') {
+      const sheet = ss.getSheetByName('Quotes');
+      const data = sheet.getDataRange().getValues();
+      const headers = data[0];
+      const idCol = headers.indexOf('quote_id');
+      const orderCol = headers.indexOf('order');
+      params.order.forEach((qid, idx) => {
+        for (let i = 1; i < data.length; i++) {
+          if (String(data[i][idCol]) === String(qid)) {
+            sheet.getRange(i + 1, orderCol + 1).setValue(idx + 1); break;
+          }
+        }
+      });
+      return jsonResponse({ success: true });
+    }
+
+    // ── 連結有效性檢查 ──
     if (params.action === 'check_links') {
       const links = sheetToObjects(ss.getSheetByName('Links'))
         .filter(l => l.url && l.url !== '#' && isTrue(l.is_visible));
@@ -404,7 +497,7 @@ function doPost(e) {
   }
 }
 
-// ── 初始化工作表結構（第一次設置時在 Apps Script 編輯器執行一次）─────────────────
+// ── 初始化工作表（第一次執行，或新增欄位後執行）────────────────────────────────
 
 function setupSheets() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -416,9 +509,53 @@ function setupSheets() {
     return sheet;
   }
 
-  ensureSheet('Sections', ['section_id','name','order','dark_color','light_color','text_color','visibility','password','allowed_users','is_visible','note']);
+  ensureSheet('Sections', ['section_id','name','order','dark_color','light_color','text_color','visibility','password','allowed_users','is_visible','note','type']);
   ensureSheet('Links',    ['link_id','section_id','name','url','order','is_visible','pinned','clicks','last_clicked','favicon_url']);
   ensureSheet('Users',    ['user_id','username','password','role']);
 
-  Logger.log('工作表建立完成');
+  // Settings with defaults
+  const settingsSheet = ensureSheet('Settings', ['key','value']);
+  if (settingsSheet.getLastRow() <= 1) {
+    settingsSheet.appendRow(['page_title', '楊凱網頁快速連接']);
+    settingsSheet.appendRow(['show_search', 'true']);
+    settingsSheet.appendRow(['header_links', JSON.stringify([{ name: 'WebRTC服務', url: 'https://yang-s-k.github.io/web_RTC/' }])]);
+  }
+
+  // Quotes with defaults
+  const quotesSheet = ensureSheet('Quotes', ['quote_id','text','order','is_active']);
+  if (quotesSheet.getLastRow() <= 1) {
+    const defaultQuotes = [
+      "「妳是什麼座的啊？」\n：「金牛座啊，你呢？」\n「我是為妳量身訂做的。」",
+      "「別再哭了，這樣有個地方會痛。」\n：「我的眼睛嗎？」\n「不是，是我的心會痛。」",
+      "「我可以跟妳問路嗎？」\n：「你要到哪裡？」\n「到妳心裡。」",
+      "「你覺得一個禮拜裡面，我比較喜歡哪一天？」\n：「星期天嗎？」\n「我喜歡有你的每一天。」",
+      "「妳為什麼要害我！」\n：「我害你什麼了？」\n「害我那麼喜歡妳！」",
+      "「下禮拜要期末考，但是我一點都不想唸書….因為我只想念妳。」",
+      "你不用多好，只要我喜歡你就好。",
+      "我有個很大的缺點，缺了點你。",
+      "老虎不發威，妳當我……當我女朋友吧。",
+      "我不能玩捉迷藏，因為喜歡妳是藏不住的。",
+      "這世界上的美有很多種，而你就是我最喜歡的那種。",
+      "妳的過去我來不及參與，但妳的未來我一定不會缺席。",
+      "我不需要征服世界，因為發現妳就是我的全世界。",
+    ];
+    defaultQuotes.forEach((text, i) => {
+      quotesSheet.appendRow([generateId('q'), text, i + 1, true]);
+    });
+  }
+
+  // 幫既有 Sections 表補上 type 欄（如果沒有的話）
+  const sectSheet = ss.getSheetByName('Sections');
+  if (sectSheet && sectSheet.getLastRow() > 0) {
+    const headers = sectSheet.getRange(1, 1, 1, sectSheet.getLastColumn()).getValues()[0];
+    if (!headers.includes('type')) {
+      const newCol = sectSheet.getLastColumn() + 1;
+      sectSheet.getRange(1, newCol).setValue('type');
+      if (sectSheet.getLastRow() > 1) {
+        sectSheet.getRange(2, newCol, sectSheet.getLastRow() - 1, 1).setValue('links');
+      }
+    }
+  }
+
+  Logger.log('工作表設定完成');
 }

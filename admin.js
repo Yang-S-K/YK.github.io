@@ -1,4 +1,3 @@
-// ── 設定（與 script.js 保持同一個 URL）──────────────────────────────────────
 const API_URL = 'https://script.google.com/macros/s/AKfycbzYH2zCpCSSgapEeektdeiEppSzQlwhP0AXxxebaM1vSiIopiec96fQdiTMrWPyAiw-/exec';
 
 const COLOR_PRESETS = [
@@ -13,11 +12,18 @@ const COLOR_PRESETS = [
   { name: '紫紅', dark: '#2e1e30', light: '#f3e5f5', text: '#ab47bc' },
 ];
 
+const SECTION_TYPE_LABELS = {
+  links:        '連結',
+  note:         '筆記',
+  embed:        '嵌入',
+  announcement: '公告',
+};
+
 // ── State ─────────────────────────────────────────────────────────────────────
 
-let state = { sections: [], links: [], users: [] };
+let state = { sections: [], links: [], users: [], settings: {}, quotes: [], headerLinks: [] };
 
-function getUser()  { try { return JSON.parse(localStorage.getItem('yk_user')); } catch { return null; } }
+function getUser() { try { return JSON.parse(localStorage.getItem('yk_user')); } catch { return null; } }
 
 // ── Auth guard ────────────────────────────────────────────────────────────────
 
@@ -46,9 +52,16 @@ async function loadData() {
   const res = await fetch(`${API_URL}?user_id=${encodeURIComponent(user.user_id)}`);
   const data = await res.json();
   if (!data.success) throw new Error(data.message);
-  state.sections = data.sections || [];
-  state.links    = data.links    || [];
-  state.users    = data.all_users || [];
+  state.sections    = data.sections    || [];
+  state.links       = data.links       || [];
+  state.users       = data.all_users   || [];
+  state.quotes      = data.all_quotes  || [];
+  state.settings    = data.all_settings || [];
+
+  // parse header_links from settings array
+  const hlRow = (data.all_settings || []).find(r => r.key === 'header_links');
+  try { state.headerLinks = JSON.parse(hlRow?.value || '[]'); }
+  catch { state.headerLinks = []; }
 }
 
 // ── Toast ─────────────────────────────────────────────────────────────────────
@@ -78,12 +91,14 @@ function renderSections() {
   const list = document.getElementById('sections-list');
   list.innerHTML = '';
   state.sections.forEach(s => {
+    const typeLabel = SECTION_TYPE_LABELS[s.type || 'links'] || s.type || 'links';
     const item = document.createElement('div');
     item.className = 'list-item';
     item.dataset.id = s.section_id;
     item.innerHTML = `
       <span class="drag-handle">⠿</span>
       <span class="item-name">${s.name}</span>
+      <span class="badge type-${s.type || 'links'}">${typeLabel}</span>
       <span class="badge ${s.visibility}">${s.visibility}</span>
       <span class="toggle-visible ${s.is_visible !== false ? 'on' : 'off'}" title="切換顯示">
         ${s.is_visible !== false ? '👁' : '🚫'}
@@ -105,10 +120,7 @@ function renderSections() {
     onEnd: async () => {
       const order = [...list.querySelectorAll('[data-id]')].map(el => el.dataset.id);
       const res = await apiPost({ action: 'reorder_sections', order });
-      if (res.success) {
-        toast('排序已儲存');
-        await refresh();
-      } else toast(res.message, true);
+      if (res.success) { toast('排序已儲存'); await refresh(); } else toast(res.message, true);
     },
   });
 }
@@ -139,9 +151,8 @@ function initColorPresets() {
     container.appendChild(chip);
   });
 
-  // Sync color pickers ↔ text inputs
   [['sm-dark', 'sm-dark-picker'], ['sm-light', 'sm-light-picker'], ['sm-text', 'sm-text-picker']].forEach(([textId, pickId]) => {
-    const txt = document.getElementById(textId);
+    const txt  = document.getElementById(textId);
     const pick = document.getElementById(pickId);
     txt.addEventListener('input',  () => { if (/^#[0-9a-fA-F]{6}$/.test(txt.value)) pick.value = txt.value; });
     pick.addEventListener('input', () => txt.value = pick.value);
@@ -150,9 +161,9 @@ function initColorPresets() {
 
 function applyPreset(index) {
   const p = COLOR_PRESETS[index];
-  document.getElementById('sm-dark').value  = p.dark;
-  document.getElementById('sm-light').value = p.light;
-  document.getElementById('sm-text').value  = p.text;
+  document.getElementById('sm-dark').value        = p.dark;
+  document.getElementById('sm-light').value       = p.light;
+  document.getElementById('sm-text').value        = p.text;
   document.getElementById('sm-dark-picker').value  = p.dark;
   document.getElementById('sm-light-picker').value = p.light;
   document.getElementById('sm-text-picker').value  = p.text;
@@ -167,13 +178,34 @@ function updateVisibilityFields() {
     (v === 'users' || v === 'passwordOrUsers') ? '' : 'none';
 }
 
+function updateSectionTypeNote() {
+  const type = document.getElementById('sm-type').value;
+  const label = document.getElementById('sm-note-label');
+  const noteEl = document.getElementById('sm-note');
+  const noteLabels = {
+    links:        '備註（顯示在標題下方）',
+    note:         '筆記內容（支援換行）',
+    embed:        '嵌入網址（iframe src）',
+    announcement: '公告文字（支援換行）',
+  };
+  const notePlaceholders = {
+    links:        '選填說明文字...',
+    note:         '輸入文字內容...',
+    embed:        'https://...',
+    announcement: '輸入公告內容...',
+  };
+  label.textContent = noteLabels[type] || '備註 / 內容';
+  noteEl.placeholder = notePlaceholders[type] || '';
+}
+
 function openSectionModal(section = null) {
   document.getElementById('section-modal-title').textContent = section ? '編輯區塊' : '新增區塊';
-  document.getElementById('sm-id').value       = section?.section_id || '';
-  document.getElementById('sm-name').value     = section?.name       || '';
-  document.getElementById('sm-dark').value     = section?.dark_color  || '#1e1e1e';
-  document.getElementById('sm-light').value    = section?.light_color || '#f4f4f9';
-  document.getElementById('sm-text').value     = section?.text_color  || '#90caf9';
+  document.getElementById('sm-id').value        = section?.section_id || '';
+  document.getElementById('sm-name').value      = section?.name       || '';
+  document.getElementById('sm-type').value      = section?.type       || 'links';
+  document.getElementById('sm-dark').value      = section?.dark_color  || '#1e1e1e';
+  document.getElementById('sm-light').value     = section?.light_color || '#f4f4f9';
+  document.getElementById('sm-text').value      = section?.text_color  || '#90caf9';
   document.getElementById('sm-dark-picker').value  = section?.dark_color  || '#1e1e1e';
   document.getElementById('sm-light-picker').value = section?.light_color || '#f4f4f9';
   document.getElementById('sm-text-picker').value  = section?.text_color  || '#90caf9';
@@ -181,10 +213,11 @@ function openSectionModal(section = null) {
   document.getElementById('sm-password').value     = section?.password    || '';
   document.getElementById('sm-allowed-users').value =
     (section?.allowed_users || '').split(',').filter(Boolean).join('\n');
-  document.getElementById('sm-note').value     = section?.note        || '';
+  document.getElementById('sm-note').value      = section?.note || '';
   document.getElementById('sm-visible').checked = section?.is_visible !== false;
   document.querySelectorAll('.preset-chip').forEach(c => c.classList.remove('selected'));
   updateVisibilityFields();
+  updateSectionTypeNote();
   document.getElementById('section-modal').classList.remove('hidden');
 }
 
@@ -194,9 +227,10 @@ async function saveSectionModal() {
   if (!name) { toast('請輸入名稱', true); return; }
 
   const payload = {
-    action: id ? 'update_section' : 'add_section',
+    action:        id ? 'update_section' : 'add_section',
     section_id:    id || undefined,
     name,
+    type:          document.getElementById('sm-type').value,
     dark_color:    document.getElementById('sm-dark').value,
     light_color:   document.getElementById('sm-light').value,
     text_color:    document.getElementById('sm-text').value,
@@ -221,6 +255,11 @@ async function saveSectionModal() {
 function closeSectionModal() { document.getElementById('section-modal').classList.add('hidden'); }
 
 // ── Links tab ─────────────────────────────────────────────────────────────────
+
+function getFaviconUrl(url) {
+  try { return `https://www.google.com/s2/favicons?domain=${new URL(url).hostname}&sz=32`; }
+  catch { return ''; }
+}
 
 function renderLinks(filterSectionId = '') {
   const list = document.getElementById('links-list');
@@ -283,11 +322,6 @@ function renderLinks(filterSectionId = '') {
   }
 }
 
-function getFaviconUrl(url) {
-  try { return `https://www.google.com/s2/favicons?domain=${new URL(url).hostname}&sz=32`; }
-  catch { return ''; }
-}
-
 async function toggleLinkVisible(link) {
   const res = await apiPost({ action: 'update_link', link_id: link.link_id, is_visible: link.is_visible === false });
   if (res.success) { toast('已更新'); await refresh(); } else toast(res.message, true);
@@ -310,12 +344,12 @@ function populateLinkSectionDropdown(selectedId = '') {
 
 function openLinkModal(link = null) {
   document.getElementById('link-modal-title').textContent = link ? '編輯連結' : '新增連結';
-  document.getElementById('lm-id').value      = link?.link_id    || '';
-  document.getElementById('lm-name').value    = link?.name       || '';
-  document.getElementById('lm-url').value     = link?.url        || '';
-  document.getElementById('lm-favicon').value = link?.favicon_url || '';
-  document.getElementById('lm-pinned').checked   = link?.pinned  || false;
-  document.getElementById('lm-visible').checked  = link?.is_visible !== false;
+  document.getElementById('lm-id').value       = link?.link_id     || '';
+  document.getElementById('lm-name').value     = link?.name        || '';
+  document.getElementById('lm-url').value      = link?.url         || '';
+  document.getElementById('lm-favicon').value  = link?.favicon_url || '';
+  document.getElementById('lm-pinned').checked  = link?.pinned     || false;
+  document.getElementById('lm-visible').checked = link?.is_visible !== false;
   const filterVal = document.getElementById('link-filter-select').value;
   populateLinkSectionDropdown(link?.section_id || filterVal || state.sections[0]?.section_id || '');
   document.getElementById('link-modal').classList.remove('hidden');
@@ -380,12 +414,12 @@ function renderUsers() {
 
 function openUserModal(user = null) {
   document.getElementById('user-modal-title').textContent = user ? '編輯用戶' : '新增用戶';
-  document.getElementById('um-editing').value  = user?.user_id || '';
-  document.getElementById('um-id').value       = user?.user_id || '';
-  document.getElementById('um-id').readOnly    = !!user;
-  document.getElementById('um-username').value = user?.username || '';
-  document.getElementById('um-password').value = '';
-  document.getElementById('um-role').value     = user?.role || 'user';
+  document.getElementById('um-editing').value   = user?.user_id  || '';
+  document.getElementById('um-id').value        = user?.user_id  || '';
+  document.getElementById('um-id').readOnly     = !!user;
+  document.getElementById('um-username').value  = user?.username || '';
+  document.getElementById('um-password').value  = '';
+  document.getElementById('um-role').value      = user?.role     || 'user';
   document.getElementById('user-modal').classList.remove('hidden');
 }
 
@@ -452,6 +486,191 @@ async function runLinkCheck() {
   });
 }
 
+// ── Interface settings tab ────────────────────────────────────────────────────
+
+function renderInterface() {
+  const allSettings = state.settings;
+
+  const getVal = key => {
+    const row = allSettings.find(r => r.key === key);
+    return row ? row.value : '';
+  };
+
+  const titleInput = document.getElementById('setting-page-title');
+  if (titleInput) titleInput.value = getVal('page_title');
+
+  const showSearchSel = document.getElementById('setting-show-search');
+  if (showSearchSel) showSearchSel.value = getVal('show_search') || 'true';
+
+  renderHeaderLinks();
+  renderQuotes();
+}
+
+async function saveSetting(key, value) {
+  const res = await apiPost({ action: 'update_setting', key, value });
+  if (res.success) { toast('設定已儲存'); } else toast(res.message, true);
+}
+
+// ── Header links ──────────────────────────────────────────────────────────────
+
+function renderHeaderLinks() {
+  const list = document.getElementById('header-links-list');
+  list.innerHTML = '';
+
+  state.headerLinks.forEach((item, idx) => {
+    const row = document.createElement('div');
+    row.className = 'list-item';
+    row.innerHTML = `
+      <div class="item-name">
+        ${item.name}
+        <div class="item-sub">${item.url}</div>
+      </div>
+      <div class="item-actions">
+        <button class="btn" data-hl-edit="${idx}">編輯</button>
+        <button class="btn btn-danger" data-hl-delete="${idx}">刪除</button>
+      </div>
+    `;
+    row.querySelector('[data-hl-edit]').addEventListener('click', () => openHeaderLinkModal(idx));
+    row.querySelector('[data-hl-delete]').addEventListener('click', () => deleteHeaderLink(idx));
+    list.appendChild(row);
+  });
+}
+
+function openHeaderLinkModal(index = null) {
+  const isEdit = index !== null && index >= 0;
+  const item = isEdit ? state.headerLinks[index] : null;
+  document.getElementById('header-link-modal-title').textContent = isEdit ? '編輯 Header 連結' : '新增 Header 連結';
+  document.getElementById('hlm-index').value = isEdit ? index : -1;
+  document.getElementById('hlm-name').value  = item?.name || '';
+  document.getElementById('hlm-url').value   = item?.url  || '';
+  document.getElementById('header-link-modal').classList.remove('hidden');
+}
+
+function closeHeaderLinkModal() {
+  document.getElementById('header-link-modal').classList.add('hidden');
+}
+
+async function saveHeaderLinkModal() {
+  const index = parseInt(document.getElementById('hlm-index').value);
+  const name  = document.getElementById('hlm-name').value.trim();
+  const url   = document.getElementById('hlm-url').value.trim();
+  if (!name || !url) { toast('請填寫名稱與網址', true); return; }
+
+  const links = [...state.headerLinks];
+  if (index >= 0) { links[index] = { name, url }; }
+  else { links.push({ name, url }); }
+
+  const res = await apiPost({ action: 'update_setting', key: 'header_links', value: JSON.stringify(links) });
+  if (res.success) {
+    state.headerLinks = links;
+    closeHeaderLinkModal();
+    renderHeaderLinks();
+    toast('已儲存');
+  } else {
+    toast(res.message, true);
+  }
+}
+
+async function deleteHeaderLink(index) {
+  if (!confirm('確定刪除此 Header 連結？')) return;
+  const links = state.headerLinks.filter((_, i) => i !== index);
+  const res = await apiPost({ action: 'update_setting', key: 'header_links', value: JSON.stringify(links) });
+  if (res.success) {
+    state.headerLinks = links;
+    renderHeaderLinks();
+    toast('已刪除');
+  } else {
+    toast(res.message, true);
+  }
+}
+
+// ── Quotes ────────────────────────────────────────────────────────────────────
+
+function renderQuotes() {
+  const list = document.getElementById('quotes-list');
+  list.innerHTML = '';
+
+  if (state.quotes.length === 0) {
+    list.innerHTML = '<p style="color:var(--muted);font-size:0.85rem;">尚無語錄</p>';
+    return;
+  }
+
+  state.quotes.forEach(q => {
+    const item = document.createElement('div');
+    item.className = 'list-item';
+    item.dataset.id = q.quote_id;
+    const preview = q.text.replace(/\n/g, ' ').substring(0, 60);
+    item.innerHTML = `
+      <span class="drag-handle">⠿</span>
+      <div class="item-name">
+        ${preview}${q.text.length > 60 ? '…' : ''}
+      </div>
+      <span class="toggle-visible ${q.is_active ? 'on' : 'off'}" title="切換啟用">
+        ${q.is_active ? '✓' : '✗'}
+      </span>
+      <div class="item-actions">
+        <button class="btn" data-qedit="${q.quote_id}">編輯</button>
+        <button class="btn btn-danger" data-qdelete="${q.quote_id}">刪除</button>
+      </div>
+    `;
+    item.querySelector('.toggle-visible').addEventListener('click', () => toggleQuoteActive(q));
+    item.querySelector('[data-qedit]').addEventListener('click', () => openQuoteModal(q));
+    item.querySelector('[data-qdelete]').addEventListener('click', () => deleteQuote(q));
+    list.appendChild(item);
+  });
+
+  Sortable.create(list, {
+    animation: 150,
+    handle: '.drag-handle',
+    onEnd: async () => {
+      const order = [...list.querySelectorAll('[data-id]')].map(el => el.dataset.id);
+      const res = await apiPost({ action: 'reorder_quotes', order });
+      if (res.success) { toast('排序已儲存'); await refresh(); } else toast(res.message, true);
+    },
+  });
+}
+
+function openQuoteModal(quote = null) {
+  document.getElementById('quote-modal-title').textContent = quote ? '編輯語錄' : '新增語錄';
+  document.getElementById('qm-id').value     = quote?.quote_id || '';
+  document.getElementById('qm-text').value   = quote?.text     || '';
+  document.getElementById('qm-active').checked = quote?.is_active !== false;
+  document.getElementById('quote-modal').classList.remove('hidden');
+}
+
+function closeQuoteModal() { document.getElementById('quote-modal').classList.add('hidden'); }
+
+async function saveQuoteModal() {
+  const id   = document.getElementById('qm-id').value;
+  const text = document.getElementById('qm-text').value.trim();
+  if (!text) { toast('請輸入語錄內容', true); return; }
+
+  const payload = id
+    ? { action: 'update_quote', quote_id: id, text, is_active: document.getElementById('qm-active').checked }
+    : { action: 'add_quote', text };
+
+  const res = await apiPost(payload);
+  if (res.success) {
+    closeQuoteModal();
+    toast(id ? '語錄已更新' : '語錄已新增');
+    await refresh();
+  } else {
+    toast(res.message, true);
+  }
+}
+
+async function toggleQuoteActive(quote) {
+  const res = await apiPost({ action: 'update_quote', quote_id: quote.quote_id, text: quote.text, is_active: !quote.is_active });
+  if (res.success) { toast('已更新'); await refresh(); } else toast(res.message, true);
+}
+
+async function deleteQuote(quote) {
+  const preview = quote.text.substring(0, 20);
+  if (!confirm(`確定刪除語錄「${preview}…」？`)) return;
+  const res = await apiPost({ action: 'delete_quote', quote_id: quote.quote_id });
+  if (res.success) { toast('已刪除'); await refresh(); } else toast(res.message, true);
+}
+
 // ── Link section filter ────────────────────────────────────────────────────────
 
 function populateLinkFilter() {
@@ -471,6 +690,7 @@ async function refresh() {
     renderSections();
     populateLinkFilter();
     renderUsers();
+    renderInterface();
   } catch (err) {
     toast('資料載入失敗: ' + err.message, true);
   }
@@ -485,6 +705,7 @@ document.getElementById('section-modal').addEventListener('click', e => {
   if (e.target === document.getElementById('section-modal')) closeSectionModal();
 });
 document.getElementById('sm-visibility').addEventListener('change', updateVisibilityFields);
+document.getElementById('sm-type').addEventListener('change', updateSectionTypeNote);
 
 document.getElementById('add-link-btn').addEventListener('click', () => openLinkModal());
 document.getElementById('link-modal-cancel').addEventListener('click', closeLinkModal);
@@ -503,6 +724,27 @@ document.getElementById('user-modal').addEventListener('click', e => {
 });
 
 document.getElementById('run-check-btn').addEventListener('click', runLinkCheck);
+
+document.getElementById('save-page-title').addEventListener('click', () => {
+  saveSetting('page_title', document.getElementById('setting-page-title').value.trim());
+});
+document.getElementById('save-show-search').addEventListener('click', () => {
+  saveSetting('show_search', document.getElementById('setting-show-search').value);
+});
+
+document.getElementById('add-header-link-btn').addEventListener('click', () => openHeaderLinkModal());
+document.getElementById('header-link-modal-cancel').addEventListener('click', closeHeaderLinkModal);
+document.getElementById('header-link-modal-save').addEventListener('click', saveHeaderLinkModal);
+document.getElementById('header-link-modal').addEventListener('click', e => {
+  if (e.target === document.getElementById('header-link-modal')) closeHeaderLinkModal();
+});
+
+document.getElementById('add-quote-btn').addEventListener('click', () => openQuoteModal());
+document.getElementById('quote-modal-cancel').addEventListener('click', closeQuoteModal);
+document.getElementById('quote-modal-save').addEventListener('click', saveQuoteModal);
+document.getElementById('quote-modal').addEventListener('click', e => {
+  if (e.target === document.getElementById('quote-modal')) closeQuoteModal();
+});
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 
