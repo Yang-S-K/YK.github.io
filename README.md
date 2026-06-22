@@ -65,8 +65,9 @@ YK.github.io/
 | visibility | public / password / users / passwordOrUsers |
 | password | 解鎖密碼 |
 | allowed_users | 允許帳號 ID，逗號分隔 |
+| pinned_order | 置頂排序數字（只影響置頂區塊的顯示順序，獨立於 order）|
 
-> ⚠️ `visibility / password / allowed_users` 也是後來新增的，舊 Sheets 需執行 `setupSheets()`。
+> ⚠️ `visibility / password / allowed_users / pinned_order` 都是後來新增的，舊 Sheets 需執行 `setupSheets()`。
 
 ### Users（用戶）
 | 欄位 | 說明 |
@@ -348,7 +349,7 @@ Sheets 沒有 `type` 欄 → `section.type === undefined` → `renderSectionBody
 ## 已實作功能清單
 
 - [x] Section CRUD + 排序 + 四種類型（links/note/embed/announcement）
-- [x] Link CRUD + 排序 + 置頂 + 點擊統計 + Favicon 自動抓取
+- [x] Link CRUD + 排序 + 置頂（多個，跨區塊可拖曳排序）+ 點擊統計 + Favicon 自動抓取
 - [x] 四種可見性模式（Section 和 Link 都有）
 - [x] 用戶登入/登出/管理（CRUD）
 - [x] 語錄系統（CRUD + 排序 + 啟用/停用 + Fallback + 開關）

@@ -299,7 +299,9 @@ function makeLockedLinkItem(link) {
 }
 
 function renderPinned(links) {
-  const pinned = links.filter(l => l.pinned);
+  const pinned = links
+    .filter(l => l.pinned)
+    .sort((a, b) => Number(a.pinned_order || 0) - Number(b.pinned_order || 0));
   const container = document.getElementById('pinned-section');
   if (pinned.length === 0) { container.style.display = 'none'; return; }
   container.style.display = '';

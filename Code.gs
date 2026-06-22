@@ -136,6 +136,7 @@ function doGet(e) {
           url:           l.url,
           order:         Number(l.order),
           pinned:        isTrue(l.pinned),
+          pinned_order:  Number(l.pinned_order) || 0,
           clicks:        Number(l.clicks) || 0,
           last_clicked:  l.last_clicked ? String(l.last_clicked) : '',
           favicon_url:   l.favicon_url || '',
@@ -159,16 +160,17 @@ function doGet(e) {
 
           if (!lInclude) return null;
           return {
-            link_id:     l.link_id,
-            section_id:  l.section_id,
-            name:        l.name,
-            url:         lLocked ? '' : l.url,
-            order:       Number(l.order),
-            pinned:      isTrue(l.pinned) && !lLocked,
-            clicks:      Number(l.clicks) || 0,
+            link_id:      l.link_id,
+            section_id:   l.section_id,
+            name:         l.name,
+            url:          lLocked ? '' : l.url,
+            order:        Number(l.order),
+            pinned:       isTrue(l.pinned) && !lLocked,
+            pinned_order: Number(l.pinned_order) || 0,
+            clicks:       Number(l.clicks) || 0,
             last_clicked: l.last_clicked ? String(l.last_clicked) : '',
-            favicon_url: lLocked ? '' : (l.favicon_url || ''),
-            locked:      lLocked,
+            favicon_url:  lLocked ? '' : (l.favicon_url || ''),
+            locked:       lLocked,
           };
         })
         .filter(Boolean);
@@ -410,12 +412,41 @@ function doPost(e) {
 
     if (params.action === 'update_link') {
       const sheet = ss.getSheetByName('Links');
-      const ok = updateRow(sheet, 'link_id', params.link_id, {
+      const updates = {
         name: params.name, url: params.url, section_id: params.section_id,
         is_visible: params.is_visible, pinned: params.pinned, favicon_url: params.favicon_url,
         visibility: params.visibility, password: params.password, allowed_users: params.allowed_users,
-      });
+      };
+      // 第一次置頂時自動分配 pinned_order（排在最後）
+      if (params.pinned) {
+        const allLinks = sheetToObjects(sheet);
+        const current = allLinks.find(l => String(l.link_id) === String(params.link_id));
+        if (!isTrue(current?.pinned)) {
+          const maxPinOrder = allLinks
+            .filter(l => isTrue(l.pinned))
+            .reduce((m, l) => Math.max(m, Number(l.pinned_order) || 0), 0);
+          updates.pinned_order = maxPinOrder + 1;
+        }
+      }
+      const ok = updateRow(sheet, 'link_id', params.link_id, updates);
       return jsonResponse({ success: ok, message: ok ? undefined : '找不到連結' });
+    }
+
+    if (params.action === 'reorder_pinned') {
+      const sheet = ss.getSheetByName('Links');
+      const data = sheet.getDataRange().getValues();
+      const headers = data[0];
+      const idCol = headers.indexOf('link_id');
+      const pinOrderCol = headers.indexOf('pinned_order');
+      if (pinOrderCol < 0) return jsonResponse({ success: false, message: '請先執行 setupSheets()' });
+      params.order.forEach((lid, idx) => {
+        for (let i = 1; i < data.length; i++) {
+          if (String(data[i][idCol]) === String(lid)) {
+            sheet.getRange(i + 1, pinOrderCol + 1).setValue(idx + 1); break;
+          }
+        }
+      });
+      return jsonResponse({ success: true });
     }
 
     if (params.action === 'delete_link') {
@@ -636,7 +667,7 @@ function setupSheets() {
     }
   }
 
-  // 幫既有 Links 表補上 visibility / password / allowed_users 欄
+  // 幫既有 Links 表補上 visibility / password / allowed_users / pinned_order 欄
   if (linksSheet && linksSheet.getLastRow() > 0) {
     const lHeaders = linksSheet.getRange(1, 1, 1, linksSheet.getLastColumn()).getValues()[0];
     ['visibility', 'password', 'allowed_users'].forEach(col => {
@@ -648,6 +679,22 @@ function setupSheets() {
         }
       }
     });
+    // 補上 pinned_order，並對已置頂的連結自動編號
+    const lHeaders2 = linksSheet.getRange(1, 1, 1, linksSheet.getLastColumn()).getValues()[0];
+    if (!lHeaders2.includes('pinned_order')) {
+      const newCol = linksSheet.getLastColumn() + 1;
+      linksSheet.getRange(1, newCol).setValue('pinned_order');
+      if (linksSheet.getLastRow() > 1) {
+        const lData = linksSheet.getDataRange().getValues();
+        const pinnedCol = lData[0].indexOf('pinned');
+        let pinOrder = 1;
+        for (let i = 1; i < lData.length; i++) {
+          if (isTrue(lData[i][pinnedCol])) {
+            linksSheet.getRange(i + 1, newCol).setValue(pinOrder++);
+          }
+        }
+      }
+    }
   }
 
   Logger.log('工作表設定完成');

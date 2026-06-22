@@ -473,6 +473,52 @@ async function deleteUser(user) {
 
 function closeUserModal() { document.getElementById('user-modal').classList.add('hidden'); }
 
+// ── Pinned order ──────────────────────────────────────────────────────────────
+
+function renderPinnedOrder() {
+  const list = document.getElementById('pinned-order-list');
+  const emptyMsg = document.getElementById('pinned-order-empty');
+  list.innerHTML = '';
+
+  const pinned = state.links
+    .filter(l => l.pinned)
+    .sort((a, b) => Number(a.pinned_order || 0) - Number(b.pinned_order || 0));
+
+  if (pinned.length === 0) {
+    emptyMsg.style.display = '';
+    return;
+  }
+  emptyMsg.style.display = 'none';
+
+  pinned.forEach(l => {
+    const sectionName = state.sections.find(s => s.section_id === l.section_id)?.name || l.section_id;
+    const favicon = l.favicon_url || getFaviconUrl(l.url);
+    const item = document.createElement('div');
+    item.className = 'list-item';
+    item.dataset.id = l.link_id;
+    item.innerHTML = `
+      <span class="drag-handle">⠿</span>
+      ${favicon ? `<img src="${favicon}" class="favicon-preview" onerror="this.remove()">` : ''}
+      <div class="item-name">
+        ${l.name}
+        <div class="item-sub">區塊：${sectionName}</div>
+      </div>
+    `;
+    list.appendChild(item);
+  });
+
+  Sortable.create(list, {
+    animation: 150,
+    handle: '.drag-handle',
+    onEnd: async () => {
+      const order = [...list.querySelectorAll('[data-id]')].map(el => el.dataset.id);
+      const res = await apiPost({ action: 'reorder_pinned', order });
+      if (res.success) { toast('置頂排序已儲存'); await refresh(); }
+      else toast(res.message, true);
+    },
+  });
+}
+
 // ── Link checker ──────────────────────────────────────────────────────────────
 
 async function runLinkCheck() {
@@ -733,6 +779,7 @@ async function refresh() {
     await loadData();
     renderSections();
     populateLinkFilter();
+    renderPinnedOrder();
     renderUsers();
     renderInterface();
   } catch (err) {
