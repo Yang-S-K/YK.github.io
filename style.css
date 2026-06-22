@@ -686,7 +686,7 @@ a.link-item .favicon {
 .note-edit-textarea {
   display: block;
   width: 100%;
-  min-height: 80px;
+  min-height: 2.5rem;
   padding: 0.5rem;
   border-radius: 6px;
   border: 1px solid var(--preview-border);
@@ -694,10 +694,11 @@ a.link-item .favicon {
   color: var(--text-color);
   font-size: 0.95rem;
   line-height: 1.7;
-  resize: vertical;
+  resize: none;
   font-family: inherit;
   box-sizing: border-box;
   margin-top: 0.5rem;
+  overflow: hidden;
 }
 
 .note-edit-actions {

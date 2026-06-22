@@ -360,6 +360,11 @@ function renderNote(section, container) {
       textarea.className = 'note-edit-textarea';
       textarea.value = section.note || '';
 
+      const autoResize = () => {
+        textarea.style.height = 'auto';
+        textarea.style.height = textarea.scrollHeight + 'px';
+      };
+
       const saveBtn = document.createElement('button');
       saveBtn.className = 'note-save-btn';
       saveBtn.textContent = '儲存';
@@ -375,6 +380,10 @@ function renderNote(section, container) {
 
       wrap.appendChild(textarea);
       wrap.appendChild(actions);
+
+      // 加入 DOM 後再計算高度才準確
+      autoResize();
+      textarea.addEventListener('input', autoResize);
 
       cancelBtn.addEventListener('click', () => {
         textarea.remove();
