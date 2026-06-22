@@ -246,16 +246,6 @@ function makeLinkAnchor(link) {
 
   a.addEventListener('click', () => trackClick(link.link_id));
 
-  const previewBox = document.getElementById('previewBox');
-  a.addEventListener('mouseenter', () => {
-    previewBox.querySelector('iframe').src = link.url;
-    previewBox.style.display = 'block';
-  });
-  a.addEventListener('mouseleave', () => {
-    previewBox.style.display = 'none';
-    previewBox.querySelector('iframe').src = '';
-  });
-
   return a;
 }
 
@@ -351,7 +341,7 @@ function renderNote(section, container) {
 
   const display = document.createElement('div');
   display.className = 'section-content-note';
-  display.innerHTML = (section.note || '').replace(/\n/g, '<br>');
+  display.innerHTML = (section.note || '').replace(/\r\n/g, '\n').replace(/\n/g, '<br>');
   wrap.appendChild(display);
 
   if (canEdit) {
@@ -398,7 +388,13 @@ function renderNote(section, container) {
         saveBtn.disabled = false;
         if (result.success) {
           section.note = newNote;
-          display.innerHTML = newNote.replace(/\n/g, '<br>');
+          display.innerHTML = newNote.replace(/\r\n/g, '\n').replace(/\n/g, '<br>');
+          // 同步更新快取，避免重開頁面後看到舊內容
+          const cached = getCachedData();
+          if (cached) {
+            const sec = (cached.sections || []).find(s => s.section_id === section.section_id);
+            if (sec) { sec.note = newNote; setCachedData(cached); }
+          }
           textarea.remove();
           actions.remove();
           display.style.display = '';
@@ -429,7 +425,7 @@ function renderEmbed(section, container) {
 function renderAnnouncement(section, container) {
   const div = document.createElement('div');
   div.className = 'section-announcement';
-  div.innerHTML = (section.note || '').replace(/\n/g, '<br>');
+  div.innerHTML = (section.note || '').replace(/\r\n/g, '\n').replace(/\n/g, '<br>');
   container.appendChild(div);
 }
 

@@ -359,7 +359,7 @@ Sheets 沒有 `type` 欄 → `section.type === undefined` → `renderSectionBody
 - [x] Stale-While-Revalidate 快取
 - [x] Session unlock（區塊解鎖暫存）
 - [x] 連結有效性檢查（Apps Script UrlFetchApp）
-- [x] 連結 Preview（hover 顯示 iframe）
+- [x] ~~連結 Preview（hover 顯示 iframe）~~ → 已移除（體驗不佳）
 - [x] 快速新增連結（admin 在 section 內 + 按鈕）
 - [x] Skeleton loading
 - [x] 頁面標題設定
