@@ -361,7 +361,7 @@ function renderNote(section, container) {
       textarea.value = section.note || '';
 
       const autoResize = () => {
-        textarea.style.height = 'auto';
+        textarea.style.height = '1px';
         textarea.style.height = textarea.scrollHeight + 'px';
       };
 
@@ -381,8 +381,8 @@ function renderNote(section, container) {
       wrap.appendChild(textarea);
       wrap.appendChild(actions);
 
-      // 加入 DOM 後再計算高度才準確
-      autoResize();
+      // requestAnimationFrame 確保瀏覽器排版完成後再量 scrollHeight
+      requestAnimationFrame(autoResize);
       textarea.addEventListener('input', autoResize);
 
       cancelBtn.addEventListener('click', () => {
